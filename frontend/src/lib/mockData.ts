@@ -1,6 +1,7 @@
 import {
   BusinessProfile,
   StructuredBusinessProfile,
+  DiscoveredOpportunity,
   BuyingSignal,
   Lead,
   CallSession,
@@ -8,6 +9,201 @@ import {
   Opportunity,
   DashboardOverview,
 } from './types';
+
+export const MOCK_DISCOVERED_OPPORTUNITIES: DiscoveredOpportunity[] = [
+  {
+    id: 'disc-001',
+    company: {
+      name: 'Example Manufacturing Ltd.',
+      domain: 'examplemanufacturing.com',
+      industry: 'Manufacturing & Industrial',
+      location: 'Chicago, IL, United States',
+      employee_count: '250-500',
+      revenue_estimate: '$45M ARR',
+    },
+    requirement: {
+      title: 'Microsoft 365 / SharePoint migration and support',
+      description:
+        'Looking for a company to migrate our Microsoft 365 environment to SharePoint and provide ongoing support.',
+      requirement_type: 'Cloud Migration & Support',
+      urgency: 'High',
+      budget_hint: '$30k - $50k initial project + managed support',
+    },
+    source: {
+      platform: 'Public Requirement Source',
+      original_url: 'https://public-procurement.demo/rfp/m365-sharepoint-0921',
+      verified_public: true,
+      confidence_score: 0.96,
+    },
+    detected_date: '2026-03-08T10:30:00Z',
+    intent_level: 'High',
+    match_score: 94,
+    matched_offering: 'Enterprise Cloud Migration & Managed Support Suite',
+    match_rationale:
+      'Direct requirement match for Microsoft 365 environment consolidation, SharePoint data architecture, and ongoing Tier 2/3 engineering support.',
+    status: 'New',
+  },
+  {
+    id: 'disc-002',
+    company: {
+      name: 'Acuity Payments Global',
+      domain: 'acuitypayments.com',
+      industry: 'Digital Banks & FinTech',
+      location: 'New York, NY, United States',
+      employee_count: '180-300',
+      revenue_estimate: '$32M ARR',
+    },
+    requirement: {
+      title: 'Real-time AML monitoring & synthetic identity fraud detection',
+      description:
+        'Seeking an autonomous transaction monitoring platform to detect synthetic identity fraud and anomalous ledger movements in real-time before our upcoming FINRA regulatory audit.',
+      requirement_type: 'AML & Fraud Prevention',
+      urgency: 'High',
+      budget_hint: '$60k - $90k ARR',
+    },
+    source: {
+      platform: 'Public RFP Portal',
+      original_url: 'https://procurement.fintech-leads.demo/rfp/aml-2026-081',
+      verified_public: true,
+      confidence_score: 0.97,
+    },
+    detected_date: '2026-03-09T08:15:00Z',
+    intent_level: 'High',
+    match_score: 96,
+    matched_offering: 'PulseSentry AML & Real-time Identity Detector',
+    match_rationale:
+      'Urgent regulatory deadline requiring automated transaction monitoring and sub-10ms synthetic identity verification across payment rails.',
+    status: 'New',
+  },
+  {
+    id: 'disc-003',
+    company: {
+      name: 'FinTrack Analytics',
+      domain: 'fintrack.io',
+      industry: 'FinTech / Financial Data',
+      location: 'San Francisco, CA, United States',
+      employee_count: '180',
+      revenue_estimate: '$28M ARR',
+    },
+    requirement: {
+      title: 'SOC 2 Type II audit automation & AWS multi-account IAM governance',
+      description:
+        'Urgent requirement for automated auditor evidence collection and least-privilege IAM right-sizing to unblock two pending Tier-1 enterprise banking contracts.',
+      requirement_type: 'Compliance & Security Posture',
+      urgency: 'High',
+      budget_hint: '$35k - $50k ARR',
+    },
+    source: {
+      platform: 'B2B Procurement Feed',
+      original_url: 'https://techprocure.demo/rfp/soc2-fintrack-492',
+      verified_public: true,
+      confidence_score: 0.95,
+    },
+    detected_date: '2026-03-07T14:20:00Z',
+    intent_level: 'High',
+    match_score: 95,
+    matched_offering: 'AuditBot 360 & CloudArmor Posture Guard',
+    match_rationale:
+      'Series B funded scaleup with immediate compliance roadblock; requires automated evidence gathering and agentic Terraform remediation.',
+    status: 'New',
+  },
+  {
+    id: 'disc-004',
+    company: {
+      name: 'HealthBridge Care',
+      domain: 'healthbridge.co',
+      industry: 'Healthcare & Telehealth',
+      location: 'Boston, MA, United States',
+      employee_count: '320',
+      revenue_estimate: '$45M ARR',
+    },
+    requirement: {
+      title: 'European GDPR data residency & ISO 27001 telehealth readiness',
+      description:
+        'RFP for pre-certified ISO 27001 evidence automation and cross-border GDPR health data sovereignty monitoring for European telehealth clinic expansion.',
+      requirement_type: 'Compliance & Data Sovereignty',
+      urgency: 'High',
+      budget_hint: '$40k - $60k ARR',
+    },
+    source: {
+      platform: 'Public Regulatory Filing',
+      original_url: 'https://regulatory-filings.health.demo/notices/iso-gdpr-2026',
+      verified_public: true,
+      confidence_score: 0.91,
+    },
+    detected_date: '2026-03-06T11:00:00Z',
+    intent_level: 'High',
+    match_score: 92,
+    matched_offering: 'AuditBot 360 (Healthcare/ISO Edition)',
+    match_rationale:
+      'Strict regulatory timetable for clinical operation in Germany and France with heavy data privacy requirements.',
+    status: 'New',
+  },
+  {
+    id: 'disc-005',
+    company: {
+      name: 'DataSpire Systems',
+      domain: 'dataspire.com',
+      industry: 'Enterprise Data & Analytics',
+      location: 'Austin, TX, United States',
+      employee_count: '540',
+      revenue_estimate: '$80M ARR',
+    },
+    requirement: {
+      title: 'Automated cloud IAM role right-sizing & toxic permission mapping',
+      description:
+        'Experiencing cloud IAM role explosion following AWS multi-account migration. Need agentless visibility into dormant credentials and automated least-privilege role right-sizing.',
+      requirement_type: 'Cloud Security & IAM',
+      urgency: 'Medium',
+      budget_hint: '$30k - $45k ARR',
+    },
+    source: {
+      platform: 'Open B2B Procurement Portal',
+      original_url: 'https://openrfp.cloudinfra.demo/req/dataspire-iam-03',
+      verified_public: true,
+      confidence_score: 0.88,
+    },
+    detected_date: '2026-03-05T16:00:00Z',
+    intent_level: 'Medium',
+    match_score: 88,
+    matched_offering: 'Zero-Trust Identity Sentinel (CIEM)',
+    match_rationale:
+      'Operational bottleneck caused by over-privileged roles and lack of cross-account IAM visibility.',
+    status: 'New',
+  },
+  {
+    id: 'disc-006',
+    company: {
+      name: 'OmniRetail Global',
+      domain: 'omniretail.com',
+      industry: 'E-Commerce & Retail Tech',
+      location: 'London, United Kingdom',
+      employee_count: '850',
+      revenue_estimate: '$120M ARR',
+    },
+    requirement: {
+      title: 'Continuous multi-cloud audit readiness ahead of Q4 IPO',
+      description:
+        'Board audit committee mandated continuous multi-cloud security monitoring and automated evidence collection across AWS and Azure environments before IPO filing.',
+      requirement_type: 'Compliance & Audit',
+      urgency: 'High',
+      budget_hint: '$50k - $80k ARR',
+    },
+    source: {
+      platform: 'Public Corporate Tender Portal',
+      original_url: 'https://tenders.omni.demo/rfp/ipo-audit-readiness',
+      verified_public: true,
+      confidence_score: 0.93,
+    },
+    detected_date: '2026-03-08T09:00:00Z',
+    intent_level: 'High',
+    match_score: 91,
+    matched_offering: 'AuditBot 360 & Posture Guard Enterprise',
+    match_rationale:
+      'Hard deadline driven by public IPO filing with external auditor committee scrutiny.',
+    status: 'New',
+  },
+];
 
 export const MOCK_STRUCTURED_PROFILE: StructuredBusinessProfile = {
   company_name: 'CloudArmor AI',
@@ -492,180 +688,32 @@ export const MOCK_LEADS: Lead[] = [
   },
 ];
 
-export const MOCK_CALLS: CallSession[] = [
-  {
-    id: 'call-001',
-    lead_id: 'lead-001',
-    company_name: 'FinTrack Analytics',
-    contact_name: 'Marcus Vance',
-    contact_title: 'VP of Engineering & Acting Head of Security',
-    status: 'Completed',
-    duration_seconds: 214,
-    started_at: '2026-03-07T15:30:00Z',
-    turns: [
-      {
-        id: 't-1',
-        speaker: 'ai',
-        text: 'Hi Marcus, this is Alex from CloudArmor AI. Saw FinTrack’s Series B—congrats! Noticed you are scaling up engineering and hiring for security roles for banking clients. Leading that prep yourself?',
-        timestamp_offset_seconds: 0,
-        sentiment: 'positive',
-      },
-      {
-        id: 't-2',
-        speaker: 'prospect',
-        text: 'Thanks Alex. Yeah, wearing the security hat right now while recruiting a Head of InfoSec. Honestly, two tier-one banks are waiting on our SOC 2 Type II report.',
-        timestamp_offset_seconds: 18,
-        sentiment: 'neutral',
-      },
-      {
-        id: 't-3',
-        speaker: 'ai',
-        text: 'CloudArmor connects via read-only API in 15 minutes and automates 90% of evidence collection directly into the auditor’s portal.',
-        timestamp_offset_seconds: 36,
-        sentiment: 'positive',
-      },
-      {
-        id: 't-4',
-        speaker: 'prospect',
-        text: 'Sounds great, but we already have AWS Security Hub turned on. What do you do that native AWS tooling doesn’t?',
-        timestamp_offset_seconds: 54,
-        sentiment: 'skeptical',
-        objection_detected: 'competitor_or_native',
-      },
-      {
-        id: 't-5',
-        speaker: 'ai',
-        text: 'Security Hub only alerts. CloudArmor automatically submits tested Terraform PRs to remediate issues and compiles auditor-ready evidence.',
-        timestamp_offset_seconds: 75,
-        sentiment: 'positive',
-      },
-      {
-        id: 't-6',
-        speaker: 'prospect',
-        text: 'Wait, it opens tested Terraform PRs? That would save 15 hours a week. Can we do a 25-minute technical walkthrough this Thursday at 2 PM PT?',
-        timestamp_offset_seconds: 98,
-        sentiment: 'enthusiastic',
-      },
-      {
-        id: 't-7',
-        speaker: 'ai',
-        text: 'Thursday at 2 PM PT works great. Sending invite now along with our FinTech case study!',
-        timestamp_offset_seconds: 115,
-        sentiment: 'positive',
-      },
-    ],
-    insights: {
-      summary:
-        'Marcus is acting interim security lead. Two tier-1 banking deals pending SOC 2. Enthusiastic about automated Terraform PR remediation. Demo scheduled for Thursday 2 PM PT.',
-      sentiment_overall: 'Enthusiastic',
-      interest_level: 'High',
-      urgency: 'High',
-      timeline_indicator: 'Targeting SOC 2 completion in 30 days',
-      extracted_pain_points: [
-        'Pulling senior engineers off sprints to collect manual audit screenshots',
-        'Tier 1 banking deals blocked pending SOC 2 compliance',
-      ],
-      objections_handled: [
-        'AWS Security Hub: Addressed with automated Terraform remediation and CPA portal integration.',
-      ],
-      qualification_verdict: 'Qualified_Interested',
-    },
-    battlecards_used: [
-      {
-        category: 'competitor',
-        objection: 'We already use AWS Security Hub',
-        recommended_pivot:
-          'Highlight that Security Hub only alerts, while CloudArmor writes tested Terraform remediation PRs.',
-        proof_point: 'Saved fintech customers an average of 60 engineering hours per audit cycle.',
-      },
-    ],
-  },
-];
+export const MOCK_CALLS: CallSession[] = [];
 
-export const MOCK_OPPORTUNITIES: Opportunity[] = [
-  {
-    id: 'opp-001',
-    lead_id: 'lead-001',
-    company_name: 'FinTrack Analytics',
-    domain: 'fintrack.io',
-    contact_name: 'Marcus Vance',
-    contact_email: 'm.vance@fintrack.io',
-    matched_offering: 'AuditBot 360 + Posture Guard Bundle',
-    deal_value_estimate: '$38,500 ARR',
-    stage: 'Qualified_Lead',
-    win_probability: 75,
-    assigned_rep: 'David Miller (Senior Enterprise AE)',
-    next_action: {
-      id: 'act-001',
-      lead_id: 'lead-001',
-      action_type: 'schedule_demo',
-      title: 'Conduct 25-min Technical Deep Dive on Terraform Auto-PRs',
-      rationale:
-        'Marcus confirmed two tier-1 banking deals pending SOC 2. Demo scheduled for Thursday 2 PM PT with DevOps lead Sarah Lin.',
-      priority: 'Urgent',
-      suggested_email_or_script:
-        'Hi Marcus, confirming our session for Thursday at 2:00 PM PT with Sarah Lin to review AWS read-only IAM auto-PRs.',
-      completed: false,
-    },
-    crm_synced: false,
-    crm_target: 'HubSpot',
-    created_at: '2026-03-07T16:00:00Z',
-    updated_at: '2026-03-08T09:00:00Z',
-  },
-  {
-    id: 'opp-002',
-    lead_id: 'lead-002',
-    company_name: 'HealthBridge Care',
-    domain: 'healthbridge.co',
-    contact_name: 'Dr. Aris Thorne',
-    contact_email: 'aris.thorne@healthbridge.co',
-    matched_offering: 'AuditBot 360 (Healthcare Edition)',
-    deal_value_estimate: '$29,000 ARR',
-    stage: 'Discovery',
-    win_probability: 60,
-    assigned_rep: 'Jessica Hayes (Healthcare Account Director)',
-    next_action: {
-      id: 'act-002',
-      lead_id: 'lead-002',
-      action_type: 'case_study_share',
-      title: 'Send Telehealth ISO 27001 & GDPR Regulatory Blueprint',
-      rationale:
-        'CTO Aris Thorne is evaluating timeline constraints for European clinic rollout in Q2.',
-      priority: 'High',
-      suggested_email_or_script:
-        'Dr. Thorne, here is our 7-step blueprint on how European digital health providers automate ISO 27001 in under 3 weeks.',
-      completed: false,
-    },
-    crm_synced: true,
-    crm_target: 'Salesforce',
-    crm_record_id: 'SF-098234',
-    created_at: '2026-03-06T10:00:00Z',
-    updated_at: '2026-03-07T11:00:00Z',
-  },
-];
+export const MOCK_OPPORTUNITIES: Opportunity[] = [];
 
 export const MOCK_OVERVIEW: DashboardOverview = {
   kpis: {
-    active_buying_signals: 6,
-    high_urgency_signals: 4,
-    total_leads: 4,
-    grade_a_leads: 2,
-    ai_calls_conducted: 1,
-    meetings_secured: 1,
-    qualified_opportunities: 2,
-    pipeline_value_estimate: '$67,500',
-    average_response_rate: '41.2%',
-    ai_qualification_rate: '68.5%',
+    active_buying_signals: 0,
+    high_urgency_signals: 0,
+    total_leads: 0,
+    grade_a_leads: 0,
+    ai_calls_conducted: 0,
+    meetings_secured: 0,
+    qualified_opportunities: 0,
+    pipeline_value_estimate: '$0',
+    average_response_rate: '0%',
+    ai_qualification_rate: '0%',
   },
   funnel: [
-    { stage: 'Signals Ingested', count: 14, percentage: 100 },
-    { stage: 'Leads Enriched', count: 4, percentage: 78 },
-    { stage: 'AI Matched', count: 4, percentage: 70 },
-    { stage: 'AI Outreach', count: 3, percentage: 42 },
-    { stage: 'Qualified', count: 3, percentage: 28 },
-    { stage: 'CRM Deals', count: 2, percentage: 22 },
+    { stage: 'Signals Ingested', count: 0, percentage: 0 },
+    { stage: 'Leads Enriched', count: 0, percentage: 0 },
+    { stage: 'AI Matched', count: 0, percentage: 0 },
+    { stage: 'AI Outreach', count: 0, percentage: 0 },
+    { stage: 'Qualified', count: 0, percentage: 0 },
+    { stage: 'CRM Deals', count: 0, percentage: 0 },
   ],
-  top_buying_signals: MOCK_SIGNALS,
-  high_priority_leads: MOCK_LEADS.slice(0, 2),
-  recent_opportunities: MOCK_OPPORTUNITIES,
+  top_buying_signals: [],
+  high_priority_leads: [],
+  recent_opportunities: [],
 };

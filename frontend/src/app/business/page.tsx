@@ -55,20 +55,20 @@ export default function BusinessProfilePage() {
     });
   }, []);
 
-  // Pre-fill realistic demo data for 1-click test
+  // Pre-fill sample input for Siyarang Bandhej
   const handlePreFillDemo = () => {
-    setCompanyName('CloudArmor AI');
-    setCompanyWebsite('https://cloudarmor.ai');
+    setCompanyName('Siyarang Bandhej');
+    setCompanyWebsite('https://siyarangbandhej.com');
     setBusinessDescription(
-      'Autonomous cloud security and continuous compliance automation for high-growth tech scaleups. We continuously monitor multi-cloud infrastructure for misconfigurations and least-privilege IAM risks, automatically opening tested Terraform pull requests to remediate issues.'
+      'Heritage artisan manufacturer of authentic Kutch and Jamnagar Bandhani, handcrafted pure Gaji silk sarees, traditional tie-dye dupattas, and bridal lehenga fabrics. Supplying premium ethnic wear retail chains, luxury boutiques, and global export houses.'
     );
     setProductsServices(
-      'CloudArmor Posture Guard (CSPM), AuditBot 360 (SOC 2/ISO Automation), Zero-Trust Identity Sentinel (CIEM)'
+      'Pure Gaji Silk Bandhani Sarees, Handcrafted Georgette Bandhej Dupattas, Artisanal Bridal Lehenga Fabrics, Bulk Wholesale Tie-Dye Dress Materials'
     );
-    setTargetIndustries('FinTech & RegTech, Healthcare & MedTech, B2B SaaS, AI & Robotics');
-    setTargetLocations('North America, Europe (UK, Germany, France), Global Remote');
+    setTargetIndustries('Ethnic Wear Retail Chains, Luxury Bridal Boutiques, Fashion Apparel Brands, Textile Wholesalers & Exporters');
+    setTargetLocations('India (Mumbai, Delhi, Ahmedabad, Kolkata, Bangalore), UAE, UK, North America');
     setIdealCustomerProfile(
-      'Series A to Pre-IPO tech scaleups with 40-1,000 employees running AWS/GCP/Kubernetes, actively pursuing SOC 2 Type II or ISO 27001 compliance.'
+      'Leading ethnic fashion retail chains (such as Fabindia, Manyavar, Westside Samoh, Jaypore) and luxury bridal boutiques seeking authentic hand-tied Bandhani with reliable bulk manufacturing and seasonal delivery capacity.'
     );
   };
 
@@ -203,7 +203,7 @@ export default function BusinessProfilePage() {
               <input
                 type="text"
                 required
-                placeholder="e.g. CloudArmor AI"
+                placeholder="e.g. Siyarang Bandhej"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
@@ -217,7 +217,7 @@ export default function BusinessProfilePage() {
               <input
                 type="url"
                 required
-                placeholder="https://cloudarmor.ai"
+                placeholder="https://siyarangbandhej.com"
                 value={companyWebsite}
                 onChange={(e) => setCompanyWebsite(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
@@ -231,7 +231,7 @@ export default function BusinessProfilePage() {
               <textarea
                 required
                 rows={3}
-                placeholder="What does your company do and what core problem does it solve?"
+                placeholder="What does your company manufacture or do, and what value do you deliver?"
                 value={businessDescription}
                 onChange={(e) => setBusinessDescription(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed"
@@ -244,7 +244,7 @@ export default function BusinessProfilePage() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. CSPM, AuditBot 360, CIEM Sentinel"
+                placeholder="e.g. Pure Silk Bandhani Sarees, Bridal Lehengas, Handloom Dupattas"
                 value={productsServices}
                 onChange={(e) => setProductsServices(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
@@ -258,7 +258,7 @@ export default function BusinessProfilePage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Fintech, SaaS, Healthcare"
+                  placeholder="Ethnic Retail, Fashion, Boutiques, Wholesale"
                   value={targetIndustries}
                   onChange={(e) => setTargetIndustries(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -271,7 +271,7 @@ export default function BusinessProfilePage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="North America, Europe"
+                  placeholder="India, UAE, UK, North America"
                   value={targetLocations}
                   onChange={(e) => setTargetLocations(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -285,7 +285,7 @@ export default function BusinessProfilePage() {
               </label>
               <textarea
                 rows={2}
-                placeholder="e.g. Series A/B scaleups with 50-500 employees running AWS/GCP"
+                placeholder="e.g. National ethnic fashion chains and premium bridal boutiques requiring authentic hand-tied Bandhani"
                 value={idealCustomerProfile}
                 onChange={(e) => setIdealCustomerProfile(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"

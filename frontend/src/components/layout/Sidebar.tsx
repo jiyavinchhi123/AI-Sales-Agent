@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard,
   Building2,
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0 z-30 select-none">
@@ -58,39 +60,33 @@ export const Sidebar: React.FC = () => {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+              className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                 isActive
-                  ? 'bg-indigo-50/80 text-indigo-700 shadow-xs'
+                  ? 'bg-indigo-50/70 text-indigo-700 font-bold'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Icon
-                  className={`w-4 h-4 transition-colors ${
-                    isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
-                  }`}
-                />
+              <div className="flex items-center gap-2.5">
+                <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
                 <span>{item.label}</span>
               </div>
-              {isActive && (
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-              )}
+              {isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />}
             </Link>
           );
         })}
       </nav>
 
-      {/* Demo Context Pill */}
+      {/* Dynamic Workspace Pill */}
       <div className="p-4 border-t border-slate-100">
         <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-            <span>Demo Profile</span>
+            <span className="truncate max-w-[130px]">{user?.company_name || 'My Workspace'}</span>
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
               Live
             </span>
           </div>
-          <div className="text-xs text-slate-500 truncate font-medium">CloudArmor AI</div>
-          <div className="text-[11px] text-slate-400 mt-1">Autonomous Cloud SecOps</div>
+          <div className="text-xs text-slate-600 truncate font-medium">{user?.full_name || 'Sales User'}</div>
+          <div className="text-[11px] text-slate-400 mt-0.5 truncate">{user?.email}</div>
         </div>
       </div>
     </aside>

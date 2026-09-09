@@ -37,9 +37,12 @@ class Settings(BaseSettings):
     # TODO: [Integration] Lead Enrichment APIs (Apollo, Clearbit, ZoomInfo)
     APOLLO_API_KEY: Optional[str] = None
 
-    # TODO: [Integration] Production Database & Vector Store (PostgreSQL / pgvector / Pinecone)
-    DATABASE_URL: Optional[str] = "sqlite:///./sales_agent.db"
+    # Database & Authentication
+    DATABASE_URL: str = "sqlite:///./sales_agent.db"
     VECTOR_DB_URL: Optional[str] = None
+    JWT_SECRET: str = "ai_sales_agent_super_secret_jwt_key_2026_production_grade"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -50,3 +53,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

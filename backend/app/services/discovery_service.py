@@ -4,14 +4,12 @@ from typing import List, Optional
 import uuid
 import datetime
 from app.schemas.signal import BuyingSignal, SignalScanRequest
-from app.services.mock_data_generator import get_default_signals
-
-
 class DiscoveryService:
     def __init__(self):
-        self._signals: List[BuyingSignal] = get_default_signals()
+        self._signals: List[BuyingSignal] = []
 
     def get_signals(
+
         self,
         signal_type: Optional[str] = None,
         min_urgency: Optional[int] = None,

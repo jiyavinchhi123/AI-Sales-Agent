@@ -4,15 +4,13 @@ from typing import List, Optional
 import uuid
 import datetime
 from app.schemas.campaign import Campaign, CampaignCreate
-from app.services.mock_data_generator import get_default_campaigns
-
-
 class CampaignService:
     def __init__(self):
-        self._campaigns: List[Campaign] = get_default_campaigns()
+        self._campaigns: List[Campaign] = []
 
     def get_campaigns(self) -> List[Campaign]:
         return self._campaigns
+
 
     def create_campaign(self, req: CampaignCreate) -> Campaign:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()

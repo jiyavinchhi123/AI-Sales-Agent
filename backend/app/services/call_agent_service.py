@@ -7,15 +7,13 @@ from app.schemas.call import (
     CallSession, CallTurn, CallInsights, ObjectionBattlecard,
     StartCallRequest, CallDialogueStepRequest
 )
-from app.services.mock_data_generator import get_default_call_sessions
-
-
 class CallAgentService:
     def __init__(self):
-        self._calls: List[CallSession] = get_default_call_sessions()
+        self._calls: List[CallSession] = []
 
     def get_all_calls(self) -> List[CallSession]:
         return self._calls
+
 
     def get_call_by_id(self, call_id: str) -> Optional[CallSession]:
         for c in self._calls:

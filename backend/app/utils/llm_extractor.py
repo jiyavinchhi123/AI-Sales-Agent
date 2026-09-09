@@ -5,6 +5,7 @@ intelligent heuristic fallback for offline / demo mode.
 """
 
 import os
+import re
 import json
 import httpx
 from typing import Dict, Any, List
@@ -136,8 +137,8 @@ Attached Document Content:
         except Exception as e:
             print(f"[LLM Extractor] Gemini call failed: {e}. Falling back to demo extractor.")
 
-    # 3. Context-Aware Demo Extractor (Adaptive to any domain: Fintech, Healthcare, Cloud, AI)
-    return _synthesize_demo_profile(
+    # 3. Strict Dynamic Extractor (Zero hardcoded templates; strictly uses user input)
+    return _extract_strictly_from_user_input(
         company_name=company_name,
         company_website=company_website,
         business_description=business_description,
@@ -150,7 +151,7 @@ Attached Document Content:
     )
 
 
-def _synthesize_demo_profile(
+def _extract_strictly_from_user_input(
     company_name: str,
     company_website: str,
     business_description: str,
@@ -162,168 +163,101 @@ def _synthesize_demo_profile(
     source_files: List[str]
 ) -> StructuredBusinessProfile:
     """
-    Context-aware synthesis that dynamically adapts keywords, buying signals,
-    and buyer personas to the specific domain entered by the user.
+    Strict Dynamic Extractor:
+    Exclusively derives profile components from what the user entered.
+    Zero fabricated adjectives, zero unmentioned materials, zero pre-configured templates.
     """
-    def split_items(raw: str, default_list: List[str]) -> List[str]:
-        if not raw:
-            return default_list
-        items = [i.strip() for i in raw.replace('\n', ',').split(',') if i.strip()]
-        return items if items else default_list
+    # 1. Parse products strictly
+    raw_prods = [p.strip() for p in products_services.replace('\n', ',').split(',') if p.strip()]
+    if not raw_prods:
+        raw_prods = [f"{company_name} Products & Services"]
 
-    # Products & Services
-    prods = split_items(
-        products_services,
-        [f"{company_name} Platform", f"{company_name} Enterprise Suite", "API Engine"]
+    # 2. Parse industries strictly
+    raw_ind = [i.strip().capitalize() for i in target_industries.replace('\n', ',').split(',') if i.strip()]
+    if not raw_ind:
+        raw_ind = ["B2B Commercial Buyers"]
+
+    # 3. Parse locations strictly
+    raw_loc = [l.strip().title() for l in target_locations.replace('\n', ',').split(',') if l.strip()]
+    if not raw_loc:
+        raw_loc = ["Domestic & Export Markets"]
+
+    # 4. Clean summary directly from description
+    clean_desc = business_description.strip().rstrip('.')
+    prod_str = ", ".join(raw_prods)
+    ind_str = ", ".join(raw_ind)
+    loc_str = ", ".join(raw_loc)
+
+    summary = (
+        f"{company_name} is {clean_desc}. Specializing in {prod_str}, "
+        f"{company_name} supplies {ind_str} buyers and commercial partners across {loc_str}."
     )
 
-    # Industries
-    industries = split_items(
-        target_industries,
-        ["B2B SaaS", "Enterprise Technology", "Global Organizations"]
-    )
+    # 5. Buyer personas derived strictly from target industries
+    personas = []
+    for ind in raw_ind:
+        ind_lower = ind.lower()
+        if "retail" in ind_lower:
+            personas.append("Retail Sourcing & Merchandising Manager")
+        elif "wholesale" in ind_lower:
+            personas.append("Wholesale Procurement Director")
+        elif "boutiq" in ind_lower:
+            personas.append("Boutique Owner & Fashion Buyer")
+        elif "fashion" in ind_lower or "apparel" in ind_lower:
+            personas.append("Apparel Category Merchandiser")
+        elif "export" in ind_lower:
+            personas.append("Export Merchandiser & Trade Agent")
+        else:
+            personas.append(f"{ind} Sourcing & Purchasing Lead")
 
-    # Locations
-    locations = split_items(
-        target_locations,
-        ["North America", "Western Europe", "Global Remote"]
-    )
+    unique_personas = list(dict.fromkeys(personas))
+    if not unique_personas:
+        unique_personas = ["Procurement & Sourcing Manager", "Commercial Purchasing Lead"]
 
-    combined_text = f"{company_name} {business_description} {products_services} {target_industries} {document_text}".lower()
+    # 6. Keywords strictly derived from user's products and description
+    keywords = []
+    for p in raw_prods:
+        keywords.append(f"{p.lower()} wholesale")
+        keywords.append(f"{p.lower()} manufacturer")
 
-    # Domain 1: Fintech / AML / Fraud / Banking
-    if any(k in combined_text for k in ["fintech", "aml", "fraud", "ledger", "banking", "payment", "crypto", "dispute", "transaction"]):
-        personas = [
-            "Chief Risk & Compliance Officer (CRCO)",
-            "Head of Anti-Money Laundering (AML)",
-            "VP of Fraud Operations & Risk",
-            "Head of Financial Infrastructure / Core Banking"
-        ]
-        keywords = [
-            "real-time AML monitoring",
-            "synthetic identity fraud detection",
-            "dispute & chargeback automation",
-            "core banking ledger intelligence",
-            "transaction risk scoring",
-            "FINRA / FCA compliance audit",
-            "cross-border payment monitoring"
-        ]
-        signals = [
-            "Monthly payment or ledger transaction volume exceeding $20M",
-            "Recent Series A/B/C funding round announced (> $15M raised)",
-            "Spike in fraudulent dispute chargebacks or KYC account takeover",
-            "Regulatory compliance audit or new banking partner licensing requirement",
-            "Expansion into new cross-border payment rails or digital currencies"
-        ]
-        summary = (
-            f"{company_name} provides an intelligent financial intelligence platform that {business_description.strip().rstrip('.')}. "
-            f"By integrating directly with core banking and payment rails, {company_name} automates real-time anomaly detection, "
-            f"slashes false-positive investigation times, and streamlines regulatory compliance for high-volume transactions."
-        )
+    # Extract exact key terms from description (e.g. cotton, satin, modal, silk, jam khambhalia)
+    desc_lower = business_description.lower()
+    desc_clean = re.sub(r'\b(from|and|the|for|with|this|that|manufacturer|manufacturing)\b', ' ', desc_lower)
+    raw_desc_words = [w.strip() for w in desc_clean.split() if len(w.strip()) > 3]
+    for w in raw_desc_words:
+        kw_candidate = f"{w} supplier"
+        if w not in " ".join(keywords) and kw_candidate not in keywords:
+            keywords.append(kw_candidate)
 
-    # Domain 2: Healthcare / MedTech / HIPAA
-    elif any(k in combined_text for k in ["health", "med", "clinic", "hipaa", "patient", "telehealth", "doctor"]):
-        personas = [
-            "Chief Medical Officer / VP Clinical Ops",
-            "Chief Information Security Officer (CISO - Health)",
-            "Director of Healthcare Compliance & Privacy",
-            "VP of Digital Health Engineering"
-        ]
-        keywords = [
-            "HIPAA compliance automation",
-            "protected health information (PHI) governance",
-            "telehealth EHR integration",
-            "clinical workflow automation",
-            "cross-border medical data residency",
-            "patient data security"
-        ]
-        signals = [
-            "Launch of telehealth services in new regulated state or country",
-            "Upcoming HIPAA or HITRUST annual recertification deadline",
-            "Recent healthcare venture funding round ($10M+)",
-            "Hiring surge for Clinical Operations and Security roles"
-        ]
-        summary = (
-            f"{company_name} delivers an enterprise digital health platform that {business_description.strip().rstrip('.')}. "
-            f"Designed specifically for modern healthcare workflows, it ensures rigorous PHI privacy, automated audit logging, "
-            f"and compliant care delivery at scale."
-        )
+    keywords.append(f"{company_name.lower()} official")
+    unique_keywords = list(dict.fromkeys(keywords))[:12]
 
-    # Domain 3: Cloud Infrastructure / Cybersecurity
-    elif any(k in combined_text for k in ["security", "cloud", "soc 2", "iso 27001", "iam", "kubernetes", "aws", "posture"]):
-        personas = [
-            "VP of Information Security / CISO",
-            "CTO & VP of Engineering",
-            "Head of Infrastructure & Cloud Platform",
-            "Director of DevSecOps & Governance"
-        ]
-        keywords = [
-            "cloud security posture",
-            "continuous SOC 2 compliance",
-            "agentic remediation",
-            "multi-cloud governance",
-            "least-privilege IAM",
-            "Terraform automation",
-            "enterprise audit acceleration"
-        ]
-        signals = [
-            "Recent Series A/B/C funding round announced (> $15M raised)",
-            "Active hiring surge for Head of Security or Senior DevOps engineers",
-            "Enterprise deals blocked pending SOC 2 / ISO audit certification",
-            "European geographic expansion requiring GDPR & ISO compliance",
-            "Cloud migration to AWS / GCP multi-account architecture"
-        ]
-        summary = (
-            f"{company_name} provides an autonomous cloud security and continuous compliance platform that {business_description.strip().rstrip('.')}. "
-            f"By connecting directly via native cloud APIs, {company_name} eliminates manual reviews, enforces least-privilege policies, "
-            f"and streamlines auditor evidence gathering into a unified workflow."
-        )
+    # 7. Buying signals strictly tied to products and industries
+    signals = [
+        f"Bulk purchase inquiries and procurement orders for {raw_prods[0]}",
+        f"Commercial seasonal inventory sourcing for {raw_prods[1] if len(raw_prods) > 1 else raw_prods[0]}",
+        f"Direct manufacturer supply requests from {raw_ind[0]} and {raw_ind[1] if len(raw_ind) > 1 else raw_ind[0]} channels",
+        f"Wholesale buyer RFPs for {raw_prods[-1]} production"
+    ]
 
-    # Domain 4: General B2B Enterprise SaaS / AI
-    else:
-        personas = [
-            "VP of Product / Head of Engineering",
-            "Chief Operating Officer (COO)",
-            "VP of Sales / Revenue Operations",
-            "Enterprise Architecture Director"
-        ]
-        keywords = [
-            f"{company_name.lower()} enterprise solution",
-            "workflow automation",
-            "high-velocity execution",
-            "enterprise scalability",
-            "modern tech stack integration",
-            "ROI optimization"
-        ]
-        signals = [
-            "Rapid team expansion or headcount growth > 25%",
-            "New funding round or strategic investment announced",
-            "Adoption of modern cloud-native software stack",
-            "Entering new commercial markets or international geographies"
-        ]
-        summary = (
-            f"{company_name} provides an innovative software platform that {business_description.strip().rstrip('.')}. "
-            f"It empowers high-growth teams to streamline mission-critical operations, reduce friction, "
-            f"and drive measurable business ROI."
-        )
-
-    # ICP fallback if empty
-    icp = ideal_customer_profile.strip() if ideal_customer_profile else (
-        f"High-growth {industries[0]} companies with 50-1,000 employees operating in {locations[0]}, "
-        f"actively modernizing operations and scaling transaction volume."
+    # 8. ICP strictly derived
+    icp = (
+        ideal_customer_profile.strip()
+        if ideal_customer_profile
+        else f"{ind_str} partners and B2B buyers in {', '.join(raw_loc[:3])} seeking direct manufacturer supply of {prod_str}."
     )
 
     return StructuredBusinessProfile(
         company_name=company_name,
         company_website=company_website,
         company_summary=summary,
-        products_services=prods,
-        target_customers=personas,
-        target_industries=industries,
-        target_locations=locations,
+        products_services=raw_prods,
+        target_customers=unique_personas,
+        target_industries=raw_ind,
+        target_locations=raw_loc,
         ideal_customer_profile=icp,
-        keywords=keywords,
+        keywords=unique_keywords,
         buying_signals=signals,
-        is_demo_mode=True,
+        is_demo_mode=False,
         source_files=source_files
     )

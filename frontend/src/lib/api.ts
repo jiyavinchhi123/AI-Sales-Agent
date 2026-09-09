@@ -1,6 +1,8 @@
 import {
   BusinessProfile,
   StructuredBusinessProfile,
+  DiscoveredOpportunity,
+  DiscoveryFilters,
   BuyingSignal,
   Lead,
   CallSession,
@@ -10,205 +12,205 @@ import {
   OfferingMatch,
   IntentScore,
 } from './types';
-import {
-  MOCK_BUSINESS_PROFILE,
-  MOCK_STRUCTURED_PROFILE,
-  MOCK_SIGNALS,
-  MOCK_LEADS,
-  MOCK_CALLS,
-  MOCK_OPPORTUNITIES,
-  MOCK_OVERVIEW,
-} from './mockData';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
-async function fetchWithFallback<T>(endpoint: string, fallbackData: T, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-    const res = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
-      cache: 'no-store',
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      console.warn(`API returned ${res.status} for ${endpoint}, using demo dataset fallback.`);
-      return fallbackData;
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('sales_agent_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-
-    return await res.json();
-  } catch (err: any) {
-    // Graceful fallback to rich mock data ensures smooth offline demo experience
-    return fallbackData;
   }
+  return headers;
+}
+
+async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const url = `${API_BASE}${endpoint}`;
+  const authHeaders = getAuthHeaders();
+
+  const isFormData = options?.body instanceof FormData;
+  const mergedHeaders = isFormData
+    ? {
+        ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+        ...(options?.headers || {}),
+      }
+    : {
+        ...authHeaders,
+        ...(options?.headers || {}),
+      };
+
+  const res = await fetch(url, {
+    ...options,
+    headers: mergedHeaders,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    let errorDetail = `Request failed with status ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson.detail) errorDetail = errJson.detail;
+    } catch {}
+    throw new Error(errorDetail);
+  }
+
+  return await res.json();
 }
 
 export const api = {
   // Health
-  checkHealth: () =>
-    fetchWithFallback<{ status: string; platform: string; mode: string }>(
-      '/health',
-      { status: 'online', platform: 'AI Sales Agent', mode: 'Demo / Active' }
-    ),
-
-  // Analytics & Dashboard
-  getDashboardOverview: () =>
-    fetchWithFallback<DashboardOverview>('/analytics/overview', MOCK_OVERVIEW),
-
-  // Business Profile & Step 2 Understanding
-  getStructuredBusinessProfile: () =>
-    fetchWithFallback<StructuredBusinessProfile>('/business/profile', MOCK_STRUCTURED_PROFILE),
-  
-  analyzeBusiness: async (formData: FormData): Promise<StructuredBusinessProfile> => {
-    const url = `${API_BASE}/business/analyze`;
+  checkHealth: async () => {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        throw new Error(`API returned ${res.status}`);
-      }
-      return await res.json();
-    } catch (err) {
-      console.warn('Backend analyze API failed or offline, generating structured understanding via demo engine.');
-      // Extract form fields for client-side fallback
-      const cName = (formData.get('company_name') as string) || 'CloudArmor AI';
-      const cWeb = (formData.get('company_website') as string) || 'https://cloudarmor.ai';
-      const cDesc = (formData.get('business_description') as string) || 'Autonomous Cloud Security';
-      const cProd = (formData.get('products_services') as string) || 'Cloud Security Suite';
-      const cInd = (formData.get('target_industries') as string) || 'Fintech, Healthcare, Enterprise SaaS';
-      const cLoc = (formData.get('target_locations') as string) || 'North America, Europe, Global';
-      const cIcp = (formData.get('ideal_customer_profile') as string) || 'High-growth technology scaleups';
+      return await request<{ status: string; platform: string; mode: string }>('/health');
+    } catch {
+      return { status: 'offline', platform: 'AI Sales Agent', mode: 'Local' };
+    }
+  },
 
+  // Analytics & Dashboard (100% Dynamic)
+  getDashboardOverview: async (): Promise<DashboardOverview> => {
+    try {
+      return await request<DashboardOverview>('/analytics/overview');
+    } catch (err) {
+      // Safe clean empty state if not connected
       return {
-        ...MOCK_STRUCTURED_PROFILE,
-        company_name: cName,
-        company_website: cWeb,
-        company_summary: `${cName} is an innovative provider that ${cDesc.trim().replace(/\.$/, '')}. Delivered via cloud-native integration, it solves compliance bottlenecks and accelerates deal velocity.`,
-        products_services: cProd.split(',').map((s) => s.trim()).filter(Boolean),
-        target_industries: cInd.split(',').map((s) => s.trim()).filter(Boolean),
-        target_locations: cLoc.split(',').map((s) => s.trim()).filter(Boolean),
-        ideal_customer_profile: cIcp,
-        is_demo_mode: true,
-        source_files: Array.from(formData.getAll('files') as File[]).map((f) => f.name).filter(Boolean),
-        updated_at: new Date().toISOString(),
+        kpis: {
+          active_buying_signals: 0,
+          high_urgency_signals: 0,
+          total_leads: 0,
+          grade_a_leads: 0,
+          ai_calls_conducted: 0,
+          meetings_secured: 0,
+          qualified_opportunities: 0,
+          pipeline_value_estimate: '$0',
+          average_response_rate: '0%',
+          ai_qualification_rate: '0%',
+        },
+        funnel: [
+          { stage: 'Signals Ingested', count: 0, percentage: 0 },
+          { stage: 'Leads Enriched', count: 0, percentage: 0 },
+          { stage: 'AI Match & Scored', count: 0, percentage: 0 },
+          { stage: 'AI Outreach / Called', count: 0, percentage: 0 },
+          { stage: 'Interested / Qualified', count: 0, percentage: 0 },
+          { stage: 'CRM Opportunities', count: 0, percentage: 0 },
+        ],
+        top_buying_signals: [],
+        high_priority_leads: [],
+        recent_opportunities: [],
       };
     }
   },
 
-  updateStructuredBusinessProfile: (data: StructuredBusinessProfile) =>
-    fetchWithFallback<StructuredBusinessProfile>('/business/profile', data, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  getBusinessProfile: () =>
-    fetchWithFallback<BusinessProfile>('/business/catalog', MOCK_BUSINESS_PROFILE),
-  updateBusinessProfile: (data: Partial<BusinessProfile>) =>
-    fetchWithFallback<BusinessProfile>('/business/profile', MOCK_BUSINESS_PROFILE, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  resetBusinessProfile: () =>
-    fetchWithFallback<StructuredBusinessProfile>('/business/reset', MOCK_STRUCTURED_PROFILE, { method: 'POST' }),
-
-  // Signals & Discovery
-  getSignals: (params?: { signal_type?: string; min_urgency?: number }) => {
-    const query = new URLSearchParams();
-    if (params?.signal_type) query.set('signal_type', params.signal_type);
-    if (params?.min_urgency !== undefined) query.set('min_urgency', params.min_urgency.toString());
-    return fetchWithFallback<BuyingSignal[]>(`/discovery/signals?${query.toString()}`, MOCK_SIGNALS);
+  // Business Profile (Step 2 Dynamic Profile)
+  getStructuredBusinessProfile: async (): Promise<StructuredBusinessProfile | null> => {
+    try {
+      const data = await request<StructuredBusinessProfile | null>('/business/profile');
+      return data;
+    } catch {
+      return null;
+    }
   },
-  scanSignals: () =>
-    fetchWithFallback<BuyingSignal[]>('/discovery/scan', [
-      {
-        id: `sig-scan-${Date.now()}`,
-        company_name: 'Acuity Robotics',
-        domain: 'acuityrobotics.ai',
-        signal_type: 'funding',
-        title: 'Secured $42M Series B for Autonomous Drone Fleet',
-        summary: 'Cloud-connected fleet expanding into defense and critical infrastructure.',
-        source: 'VentureBeat',
-        detected_at: new Date().toISOString(),
-        confidence_score: 0.94,
-        urgency_level: 'High',
-        urgency_score: 93,
-        processed: false,
-      },
-    ], { method: 'POST' }),
-  convertSignalToLead: (signalId: string) =>
-    fetchWithFallback<Lead>(`/discovery/convert-to-lead/${signalId}`, MOCK_LEADS[0], {
+
+  analyzeBusiness: async (formData: FormData): Promise<StructuredBusinessProfile> => {
+    const url = `${API_BASE}/business/analyze`;
+    const authHeaders = getAuthHeaders();
+    const headers: Record<string, string> = {};
+    if (authHeaders.Authorization) {
+      headers['Authorization'] = authHeaders.Authorization;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let msg = 'Failed to analyze business';
+      try {
+        const err = await res.json();
+        if (err.detail) msg = err.detail;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    return await res.json();
+  },
+
+  updateStructuredBusinessProfile: (data: StructuredBusinessProfile) =>
+    request<StructuredBusinessProfile>('/business/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Step 3: Lead & Buying Requirement Discovery
+  discoverLeads: async (filters?: DiscoveryFilters): Promise<DiscoveredOpportunity[]> => {
+    const query = new URLSearchParams();
+    if (filters?.location) query.set('location', filters.location);
+    if (filters?.industry) query.set('industry', filters.industry);
+    if (filters?.requirement_type) query.set('requirement_type', filters.requirement_type);
+    if (filters?.recency) query.set('recency', filters.recency);
+    if (filters?.intent_level) query.set('intent_level', filters.intent_level);
+    if (filters?.search) query.set('search', filters.search);
+
+    try {
+      return await request<DiscoveredOpportunity[]>(`/discovery/discover?${query.toString()}`);
+    } catch {
+      return [];
+    }
+  },
+
+  convertDiscoveredOpportunity: (opportunityId: string): Promise<Lead> =>
+    request<Lead>(`/discovery/convert-discovered/${opportunityId}`, {
       method: 'POST',
     }),
 
-  // Leads
-  getLeads: (params?: { status?: string; grade?: string; search?: string }) => {
+  // Leads (100% Dynamic from SQLite)
+  getLeads: async (params?: { status?: string; grade?: string; search?: string }): Promise<Lead[]> => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
     if (params?.grade) query.set('grade', params.grade);
     if (params?.search) query.set('search', params.search);
-    return fetchWithFallback<Lead[]>(`/leads?${query.toString()}`, MOCK_LEADS);
+
+    try {
+      return await request<Lead[]>(`/leads?${query.toString()}`);
+    } catch {
+      return [];
+    }
   },
-  getLead: (leadId: string) =>
-    fetchWithFallback<Lead>(
-      `/leads/${leadId}`,
-      MOCK_LEADS.find((l) => l.id === leadId) || MOCK_LEADS[0]
-    ),
-  matchLead: (leadId: string) =>
-    fetchWithFallback<OfferingMatch>(`/leads/${leadId}/match`, MOCK_LEADS[0].match!, {
-      method: 'POST',
+
+  getLead: (leadId: string): Promise<Lead> =>
+    request<Lead>(`/leads/${leadId}`),
+
+  updateLeadStatus: (leadId: string, status: string): Promise<Lead> =>
+    request<Lead>(`/leads/${leadId}/status?status=${encodeURIComponent(status)}`, {
+      method: 'PUT',
     }),
-  scoreLead: (leadId: string) =>
-    fetchWithFallback<IntentScore>(`/leads/${leadId}/score`, MOCK_LEADS[0].intent!, {
-      method: 'POST',
-    }),
-  updateLeadStatus: (leadId: string, status: string) =>
-    fetchWithFallback<Lead>(
-      `/leads/${leadId}/status?status=${encodeURIComponent(status)}`,
-      { ...MOCK_LEADS[0], status },
-      { method: 'PUT' }
-    ),
 
   // AI Calling
-  getCallSessions: () =>
-    fetchWithFallback<CallSession[]>('/calling/sessions', MOCK_CALLS),
-  getCallSession: (callId: string) =>
-    fetchWithFallback<CallSession>(`/calling/sessions/${callId}`, MOCK_CALLS[0]),
-  startCall: (leadId: string, voiceTone?: string) =>
-    fetchWithFallback<CallSession>('/calling/start', MOCK_CALLS[0], {
+  getCallSessions: async (): Promise<CallSession[]> => {
+    try {
+      return await request<CallSession[]>('/calling/sessions');
+    } catch {
+      return [];
+    }
+  },
+
+  getCallSession: (callId: string): Promise<CallSession> =>
+    request<CallSession>(`/calling/sessions/${callId}`),
+
+  startCall: (leadId: string, voiceTone?: string): Promise<CallSession> =>
+    request<CallSession>('/calling/start', {
       method: 'POST',
       body: JSON.stringify({ lead_id: leadId, voice_tone: voiceTone }),
     }),
-  stepCall: (callId: string, prospectResponse: string, voiceTone?: string) =>
-    fetchWithFallback<CallSession>('/calling/step', {
-      ...MOCK_CALLS[0],
-      turns: [
-        ...MOCK_CALLS[0].turns,
-        {
-          id: `t-p-${Date.now()}`,
-          speaker: 'prospect',
-          text: prospectResponse,
-          timestamp_offset_seconds: 130,
-        },
-        {
-          id: `t-ai-${Date.now()}`,
-          speaker: 'ai',
-          text: 'That makes total sense. We specifically designed CloudArmor to automate evidence collection without interrupting your sprint velocity. Can we show you a 15-minute live preview this Thursday?',
-          timestamp_offset_seconds: 145,
-          sentiment: 'positive',
-        },
-      ],
-    }, {
+
+  stepCall: (callId: string, prospectResponse: string, voiceTone?: string): Promise<CallSession> =>
+    request<CallSession>('/calling/step', {
       method: 'POST',
       body: JSON.stringify({
         call_id: callId,
@@ -218,43 +220,31 @@ export const api = {
     }),
 
   // Campaigns
-  getCampaigns: () =>
-    fetchWithFallback<Campaign[]>('/campaigns', [
-      {
-        id: 'camp-001',
-        name: 'Q1 Scaleup Compliance & Audit Acceleration',
-        description: 'Outreach targeting recently funded Series A/B SaaS companies.',
-        target_criteria: 'Series A/B funding within 60 days, hiring DevOps/Security',
-        status: 'Active',
-        channels: ['AI Voice Call', 'Personalized Email'],
-        total_leads: 18,
-        contacted_count: 14,
-        interested_count: 6,
-        scheduled_meetings: 4,
-        response_rate: 42.8,
-        created_at: '2026-03-01T09:00:00Z',
-      },
-    ]),
+  getCampaigns: async (): Promise<Campaign[]> => {
+    try {
+      return await request<Campaign[]>('/campaigns');
+    } catch {
+      return [];
+    }
+  },
 
   // Opportunities & CRM
-  getOpportunities: () =>
-    fetchWithFallback<Opportunity[]>('/opportunities', MOCK_OPPORTUNITIES),
-  createOpportunityFromLead: (leadId: string) =>
-    fetchWithFallback<Opportunity>(`/opportunities/create-from-lead/${leadId}`, MOCK_OPPORTUNITIES[0], {
+  getOpportunities: async (): Promise<Opportunity[]> => {
+    try {
+      return await request<Opportunity[]>('/opportunities');
+    } catch {
+      return [];
+    }
+  },
+
+  createOpportunityFromLead: (leadId: string): Promise<Opportunity> =>
+    request<Opportunity>(`/opportunities/create-from-lead/${leadId}`, {
       method: 'POST',
     }),
-  exportToCRM: (oppId: string, targetCrm: string = 'HubSpot') =>
-    fetchWithFallback<Opportunity>(
-      '/opportunities/crm-export',
-      {
-        ...MOCK_OPPORTUNITIES[0],
-        crm_synced: true,
-        crm_target: targetCrm,
-        crm_record_id: `${targetCrm.slice(0, 2).toUpperCase()}-9941`,
-      },
-      {
-        method: 'POST',
-        body: JSON.stringify({ opportunity_id: oppId, target_crm: targetCrm }),
-      }
-    ),
+
+  exportToCRM: (oppId: string, targetCrm: string = 'HubSpot'): Promise<Opportunity> =>
+    request<Opportunity>('/opportunities/crm-export', {
+      method: 'POST',
+      body: JSON.stringify({ opportunity_id: oppId, target_crm: targetCrm }),
+    }),
 };

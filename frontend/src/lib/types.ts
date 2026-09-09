@@ -1,3 +1,17 @@
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  company_name?: string;
+  created_at?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
 export interface ProductOffering {
   id: string;
   name: string;
@@ -10,6 +24,7 @@ export interface ProductOffering {
   ideal_customer_size: string;
   proof_point?: string;
 }
+
 
 export interface TargetPersona {
   id: string;
@@ -58,6 +73,53 @@ export interface StructuredBusinessProfile {
   is_demo_mode: boolean;
   source_files: string[];
   updated_at?: string;
+}
+
+// --- STEP 3: Lead Discovery Models ---
+export interface Company {
+  name: string;
+  domain: string;
+  industry: string;
+  location: string;
+  employee_count: string;
+  revenue_estimate?: string;
+}
+
+export interface Requirement {
+  title: string;
+  description: string;
+  requirement_type: string;
+  urgency: 'High' | 'Medium' | 'Low' | string;
+  budget_hint?: string;
+}
+
+export interface Source {
+  platform: string;
+  original_url: string;
+  verified_public: boolean;
+  confidence_score: number;
+}
+
+export interface DiscoveredOpportunity {
+  id: string;
+  company: Company;
+  requirement: Requirement;
+  source: Source;
+  detected_date: string;
+  intent_level: 'High' | 'Medium' | 'Low' | string;
+  match_score: number;
+  matched_offering: string;
+  match_rationale: string;
+  status: 'New' | 'Saved' | 'Converted' | string;
+}
+
+export interface DiscoveryFilters {
+  location?: string;
+  industry?: string;
+  requirement_type?: string;
+  recency?: string;
+  intent_level?: string;
+  search?: string;
 }
 
 export interface BuyingSignal {

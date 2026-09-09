@@ -1,15 +1,14 @@
-"""CRM Handoff and Next-Best-Action Service"""
+"""CRM Handoff and Next-Best-Action Service. Zero static demo defaults."""
 
 from typing import List, Optional
 import uuid
 import datetime
 from app.schemas.opportunity import Opportunity, NextBestAction, CRMHandoffRequest
-from app.services.mock_data_generator import get_default_opportunities
 
 
 class CRMService:
     def __init__(self):
-        self._opportunities: List[Opportunity] = get_default_opportunities()
+        self._opportunities: List[Opportunity] = []
 
     def get_opportunities(self) -> List[Opportunity]:
         return self._opportunities
@@ -40,22 +39,19 @@ class CRMService:
             contact_email=contact_email,
             matched_offering=matched_offering,
             deal_value_estimate=deal_value,
-            stage="Qualified_Lead",
-            win_probability=70,
-            assigned_rep="David Miller (Senior Enterprise AE)",
+            stage="Discovery",
+            win_probability=60,
+            assigned_sales_rep="Assigned AE",
             next_action=NextBestAction(
-                id=f"act-{uuid.uuid4().hex[:4]}",
-                lead_id=lead_id,
-                action_type="schedule_demo",
-                title="Send Calendar Invitation for Solutions Architecture Walkthrough",
-                rationale="Lead verified high intent following AI call qualification.",
-                priority="Urgent",
-                suggested_email_or_script=f"Hi {contact_name},\n\nLooking forward to demonstrating how our solution integrates with your environment.\n\nBest,\nDavid",
-                completed=False
+                action_type="Technical Demo",
+                title=f"Schedule 20-min technical preview with {contact_name}",
+                due_in="2 business days",
+                priority="High",
+                context_rationale="Prospect validated intent requirement.",
+                recommended_collateral=[]
             ),
+            qualification_notes="Converted from active pipeline lead.",
             crm_synced=False,
-            crm_target="HubSpot",
-            crm_record_id=None,
             created_at=now_iso,
             updated_at=now_iso
         )
@@ -66,10 +62,9 @@ class CRMService:
         opp = self.get_opportunity_by_id(req.opportunity_id)
         if not opp:
             raise ValueError(f"Opportunity {req.opportunity_id} not found")
-
         opp.crm_synced = True
         opp.crm_target = req.target_crm
-        opp.crm_record_id = f"{req.target_crm[:2].upper()}-{uuid.uuid4().hex[:6].upper()}"
+        opp.crm_record_id = f"{req.target_crm.upper()[:3]}-{uuid.uuid4().hex[:6].upper()}"
         opp.updated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         return opp
 

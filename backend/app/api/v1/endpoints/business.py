@@ -1,8 +1,12 @@
 import json
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import get_optional_current_user
+from app.models.user import User
 from app.schemas.business import (
-    BusinessProfile, BusinessProfileUpdate, ProductOffering,
     BusinessAnalyzeInput, StructuredBusinessProfile
 )
 from app.services.business_service import business_service
@@ -10,16 +14,43 @@ from app.services.business_service import business_service
 router = APIRouter()
 
 
-@router.get("/profile", response_model=StructuredBusinessProfile)
-def get_structured_business_profile():
-    """Retrieve the AI-extracted structured business profile."""
-    return business_service.get_structured_profile()
+def _get_user_id(current_user: Optional[User], db: Session) -> str:
+    if current_user:
+        return current_user.id
+    first_user = db.query(User).first()
+    if first_user:
+        return first_user.id
+    guest = User(
+        email="user@salesagent.ai",
+        hashed_password="",
+        full_name="Sales Leader",
+        company_name="My Company"
+    )
+    db.add(guest)
+    db.commit()
+    db.refresh(guest)
+    return guest.id
+
+
+@router.get("/profile", response_model=Optional[StructuredBusinessProfile])
+def get_structured_business_profile(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve the AI-extracted structured business profile for the user."""
+    user_id = _get_user_id(current_user, db)
+    return business_service.get_profile_by_user(user_id, db)
 
 
 @router.put("/profile", response_model=StructuredBusinessProfile)
-def update_structured_business_profile(profile: StructuredBusinessProfile):
-    """Update and persist edits to the structured business profile."""
-    return business_service.update_structured_profile(profile)
+def update_structured_business_profile(
+    profile: StructuredBusinessProfile,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update and persist edits to the structured business profile in SQLite."""
+    user_id = _get_user_id(current_user, db)
+    return business_service.save_or_update_profile(user_id, profile, db)
 
 
 @router.post("/analyze", response_model=StructuredBusinessProfile)
@@ -31,11 +62,13 @@ async def analyze_business(
     target_industries: Optional[str] = Form(""),
     target_locations: Optional[str] = Form(""),
     ideal_customer_profile: Optional[str] = Form(""),
-    files: Optional[List[UploadFile]] = File(None)
+    files: Optional[List[UploadFile]] = File(None),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Analyzes company info and uploaded collateral (PDF, DOCX, TXT)
-    using LLM extraction with realistic demo mode fallback.
+    using LLM extraction and saves dynamic profile to user DB.
     """
     if not company_name.strip():
         raise HTTPException(status_code=400, detail="Company Name is required.")
@@ -59,31 +92,18 @@ async def analyze_business(
         ideal_customer_profile=ideal_customer_profile or ""
     )
 
-    result = await business_service.analyze_business(input_data, uploaded_files_data)
-    return result
+    user_id = _get_user_id(current_user, db)
+    return await business_service.analyze_and_save_business(
+        input_data, user_id, db, uploaded_files_data
+    )
 
 
 @router.post("/analyze-json", response_model=StructuredBusinessProfile)
-async def analyze_business_json(input_data: BusinessAnalyzeInput):
+async def analyze_business_json(
+    input_data: BusinessAnalyzeInput,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
     """JSON alternative for analyzing business info without file attachments."""
-    return await business_service.analyze_business(input_data, [])
-
-
-# Legacy / Catalog routes
-@router.get("/catalog", response_model=BusinessProfile)
-def get_business_catalog():
-    """Retrieve raw product catalog and target personas."""
-    return business_service.get_profile()
-
-
-@router.post("/products", response_model=BusinessProfile)
-def add_product(product: ProductOffering):
-    """Add a new product offering to the seller catalog."""
-    return business_service.add_product(product)
-
-
-@router.post("/reset", response_model=StructuredBusinessProfile)
-def reset_to_demo_profile():
-    """Reset the business profile to the default CloudArmor AI demo dataset."""
-    business_service.reset_to_default()
-    return business_service.get_structured_profile()
+    user_id = _get_user_id(current_user, db)
+    return await business_service.analyze_and_save_business(input_data, user_id, db, [])
