@@ -17,4 +17,5 @@ class CallSession(Base):
     turns = Column(JSON, default=list)
     summary = Column(Text, nullable=True)
     qualification_verdict = Column(String(100), default="Qualified")
+    qualification_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)

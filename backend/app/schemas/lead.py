@@ -47,6 +47,7 @@ class Lead(BaseModel):
     contacts: List[LeadContact] = Field(default_factory=list)
     primary_contact: Optional[LeadContact] = None
     match: Optional[OfferingMatch] = None
+    matched_offering: Optional[str] = None
     intent: Optional[IntentScore] = None
     status: str = "New"  # New, Enriched, Matched, Outreach_Ready, Contacted, Interested, Disqualified, Opportunity_Created
     created_at: str

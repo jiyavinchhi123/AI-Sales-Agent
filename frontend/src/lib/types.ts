@@ -184,6 +184,7 @@ export interface Lead {
   contacts: LeadContact[];
   primary_contact?: LeadContact;
   match?: OfferingMatch;
+  matched_offering?: string;
   intent?: IntentScore;
   status: string;
   created_at: string;
@@ -210,12 +211,19 @@ export interface ObjectionBattlecard {
 export interface CallInsights {
   summary: string;
   sentiment_overall: string;
-  interest_level: 'High' | 'Medium' | 'Low';
+  interest_level: 'High' | 'Medium' | 'Low' | string;
   urgency: string;
+  need?: string;
+  scope_users?: string;
+  timeline?: string;
+  budget?: string;
+  authority?: string;
+  intent_score?: number;
+  next_best_action?: string;
   budget_indicator?: string;
   timeline_indicator?: string;
-  extracted_pain_points: string[];
-  objections_handled: string[];
+  extracted_pain_points?: string[];
+  objections_handled?: string[];
   qualification_verdict: string;
 }
 
@@ -227,6 +235,7 @@ export interface CallSession {
   contact_title: string;
   campaign_id?: string;
   status: string;
+  stage?: string;
   duration_seconds: number;
   started_at: string;
   turns: CallTurn[];

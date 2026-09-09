@@ -219,6 +219,11 @@ export const api = {
       }),
     }),
 
+  endCall: (callId: string): Promise<CallSession> =>
+    request<CallSession>(`/calling/end/${callId}`, {
+      method: 'POST',
+    }),
+
   // Campaigns
   getCampaigns: async (): Promise<Campaign[]> => {
     try {
