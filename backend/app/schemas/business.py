@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -46,3 +46,31 @@ class BusinessProfileUpdate(BaseModel):
     description: Optional[str] = None
     value_propositions: Optional[List[str]] = None
     differentiators: Optional[List[str]] = None
+
+
+# --- STEP 2: Business Understanding Schemas ---
+
+class BusinessAnalyzeInput(BaseModel):
+    company_name: str
+    company_website: str
+    business_description: str
+    products_services: Optional[str] = ""
+    target_industries: Optional[str] = ""
+    target_locations: Optional[str] = ""
+    ideal_customer_profile: Optional[str] = ""
+
+
+class StructuredBusinessProfile(BaseModel):
+    company_name: str
+    company_website: str
+    company_summary: str
+    products_services: List[str] = Field(default_factory=list)
+    target_customers: List[str] = Field(default_factory=list)
+    target_industries: List[str] = Field(default_factory=list)
+    target_locations: List[str] = Field(default_factory=list)
+    ideal_customer_profile: str
+    keywords: List[str] = Field(default_factory=list)
+    buying_signals: List[str] = Field(default_factory=list)
+    is_demo_mode: bool = True
+    source_files: List[str] = Field(default_factory=list)
+    updated_at: str = ""

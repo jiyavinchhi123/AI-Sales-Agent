@@ -34,6 +34,32 @@ export interface BusinessProfile {
   collateral_docs: string[];
 }
 
+export interface BusinessAnalyzeInput {
+  company_name: string;
+  company_website: string;
+  business_description: string;
+  products_services?: string;
+  target_industries?: string;
+  target_locations?: string;
+  ideal_customer_profile?: string;
+}
+
+export interface StructuredBusinessProfile {
+  company_name: string;
+  company_website: string;
+  company_summary: string;
+  products_services: string[];
+  target_customers: string[];
+  target_industries: string[];
+  target_locations: string[];
+  ideal_customer_profile: string;
+  keywords: string[];
+  buying_signals: string[];
+  is_demo_mode: boolean;
+  source_files: string[];
+  updated_at?: string;
+}
+
 export interface BuyingSignal {
   id: string;
   company_name: string;

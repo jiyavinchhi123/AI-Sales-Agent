@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.api import api_router
+from app.api.v1.endpoints import business
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -26,12 +27,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API Router
+# Include v1 API Router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Also mount /api/business directly for user prompt specification:
+# POST /api/business/analyze
+# GET /api/business/profile
+# PUT /api/business/profile
+app.include_router(business.router, prefix="/api/business", tags=["Business Understanding Direct"])
 
 
 @app.get("/health", tags=["Health"])
 @app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 def health_check():
     return {
         "status": "online",

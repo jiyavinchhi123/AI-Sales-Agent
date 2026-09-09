@@ -1,5 +1,6 @@
 import {
   BusinessProfile,
+  StructuredBusinessProfile,
   BuyingSignal,
   Lead,
   CallSession,
@@ -11,6 +12,7 @@ import {
 } from './types';
 import {
   MOCK_BUSINESS_PROFILE,
+  MOCK_STRUCTURED_PROFILE,
   MOCK_SIGNALS,
   MOCK_LEADS,
   MOCK_CALLS,
@@ -62,16 +64,63 @@ export const api = {
   getDashboardOverview: () =>
     fetchWithFallback<DashboardOverview>('/analytics/overview', MOCK_OVERVIEW),
 
-  // Business Profile
+  // Business Profile & Step 2 Understanding
+  getStructuredBusinessProfile: () =>
+    fetchWithFallback<StructuredBusinessProfile>('/business/profile', MOCK_STRUCTURED_PROFILE),
+  
+  analyzeBusiness: async (formData: FormData): Promise<StructuredBusinessProfile> => {
+    const url = `${API_BASE}/business/analyze`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error(`API returned ${res.status}`);
+      }
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend analyze API failed or offline, generating structured understanding via demo engine.');
+      // Extract form fields for client-side fallback
+      const cName = (formData.get('company_name') as string) || 'CloudArmor AI';
+      const cWeb = (formData.get('company_website') as string) || 'https://cloudarmor.ai';
+      const cDesc = (formData.get('business_description') as string) || 'Autonomous Cloud Security';
+      const cProd = (formData.get('products_services') as string) || 'Cloud Security Suite';
+      const cInd = (formData.get('target_industries') as string) || 'Fintech, Healthcare, Enterprise SaaS';
+      const cLoc = (formData.get('target_locations') as string) || 'North America, Europe, Global';
+      const cIcp = (formData.get('ideal_customer_profile') as string) || 'High-growth technology scaleups';
+
+      return {
+        ...MOCK_STRUCTURED_PROFILE,
+        company_name: cName,
+        company_website: cWeb,
+        company_summary: `${cName} is an innovative provider that ${cDesc.trim().replace(/\.$/, '')}. Delivered via cloud-native integration, it solves compliance bottlenecks and accelerates deal velocity.`,
+        products_services: cProd.split(',').map((s) => s.trim()).filter(Boolean),
+        target_industries: cInd.split(',').map((s) => s.trim()).filter(Boolean),
+        target_locations: cLoc.split(',').map((s) => s.trim()).filter(Boolean),
+        ideal_customer_profile: cIcp,
+        is_demo_mode: true,
+        source_files: Array.from(formData.getAll('files') as File[]).map((f) => f.name).filter(Boolean),
+        updated_at: new Date().toISOString(),
+      };
+    }
+  },
+
+  updateStructuredBusinessProfile: (data: StructuredBusinessProfile) =>
+    fetchWithFallback<StructuredBusinessProfile>('/business/profile', data, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   getBusinessProfile: () =>
-    fetchWithFallback<BusinessProfile>('/business/profile', MOCK_BUSINESS_PROFILE),
+    fetchWithFallback<BusinessProfile>('/business/catalog', MOCK_BUSINESS_PROFILE),
   updateBusinessProfile: (data: Partial<BusinessProfile>) =>
     fetchWithFallback<BusinessProfile>('/business/profile', MOCK_BUSINESS_PROFILE, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   resetBusinessProfile: () =>
-    fetchWithFallback<BusinessProfile>('/business/reset', MOCK_BUSINESS_PROFILE, { method: 'POST' }),
+    fetchWithFallback<StructuredBusinessProfile>('/business/reset', MOCK_STRUCTURED_PROFILE, { method: 'POST' }),
 
   // Signals & Discovery
   getSignals: (params?: { signal_type?: string; min_urgency?: number }) => {

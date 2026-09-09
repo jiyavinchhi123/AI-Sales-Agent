@@ -1,5 +1,6 @@
 import {
   BusinessProfile,
+  StructuredBusinessProfile,
   BuyingSignal,
   Lead,
   CallSession,
@@ -7,6 +8,55 @@ import {
   Opportunity,
   DashboardOverview,
 } from './types';
+
+export const MOCK_STRUCTURED_PROFILE: StructuredBusinessProfile = {
+  company_name: 'CloudArmor AI',
+  company_website: 'https://cloudarmor.ai',
+  company_summary:
+    'CloudArmor AI delivers an autonomous cloud security and continuous compliance platform that continuously monitors AWS, GCP, and Kubernetes for misconfigurations, detects least-privilege IAM risks, and automates 90% of SOC 2, ISO 27001, and HIPAA audit evidence gathering.',
+  products_services: [
+    'CloudArmor Posture Guard (CSPM)',
+    'AuditBot 360 (Automated Compliance)',
+    'Zero-Trust Identity Sentinel (CIEM)',
+  ],
+  target_customers: [
+    'VP of Information Security / CISO',
+    'CTO & VP of Engineering',
+    'Head of Infrastructure & SecOps',
+    'DevSecOps / Compliance Leads',
+  ],
+  target_industries: [
+    'Fintech & RegTech',
+    'Healthcare & Telemedicine',
+    'B2B Enterprise SaaS',
+    'AI & Autonomous Systems',
+  ],
+  target_locations: [
+    'North America (US, Canada)',
+    'European Union (UK, Germany, France)',
+    'Global Remote-First Organizations',
+  ],
+  ideal_customer_profile:
+    'Series A to Pre-IPO tech scaleups with 40-1,000 employees running multi-account cloud environments, facing upcoming enterprise audits, and seeking to unblock revenue stalled on compliance reviews.',
+  keywords: [
+    'cloud posture management',
+    'automated SOC 2 evidence',
+    'agentic terraform PRs',
+    'least privilege IAM',
+    'HIPAA audit acceleration',
+    'continuous cloud compliance',
+  ],
+  buying_signals: [
+    'Series A/B/C funding round announced (> $15M raised)',
+    'Active hiring for Head of Security or DevOps engineers',
+    'Enterprise deals blocked pending SOC 2 / ISO audit certification',
+    'European geographic expansion requiring GDPR & ISO compliance',
+    'Cloud migration or multi-account infrastructure restructuring',
+  ],
+  is_demo_mode: true,
+  source_files: ['CloudArmor_Architecture_Whitepaper_2026.pdf'],
+  updated_at: '2026-03-08T12:00:00Z',
+};
 
 export const MOCK_BUSINESS_PROFILE: BusinessProfile = {
   id: 'biz-cloudarmor',

@@ -1,147 +1,679 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Building2, Shield, Layers, Users, FileText, CheckCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Building2,
+  Sparkles,
+  UploadCloud,
+  FileText,
+  X,
+  Edit3,
+  CheckCircle2,
+  AlertCircle,
+  Layers,
+  Users,
+  Globe2,
+  Tags,
+  Radar,
+  RefreshCw,
+  Save,
+  ChevronRight,
+  ShieldCheck,
+  ExternalLink,
+} from 'lucide-react';
 import { api } from '@/lib/api';
-import { BusinessProfile } from '@/lib/types';
+import { StructuredBusinessProfile } from '@/lib/types';
+import { Badge } from '@/components/ui/Badge';
 
 export default function BusinessProfilePage() {
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Form Inputs
+  const [companyName, setCompanyName] = useState('');
+  const [companyWebsite, setCompanyWebsite] = useState('');
+  const [businessDescription, setBusinessDescription] = useState('');
+  const [productsServices, setProductsServices] = useState('');
+  const [targetIndustries, setTargetIndustries] = useState('');
+  const [targetLocations, setTargetLocations] = useState('');
+  const [idealCustomerProfile, setIdealCustomerProfile] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
+  // State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState('');
+  const [profile, setProfile] = useState<StructuredBusinessProfile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<StructuredBusinessProfile | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing profile on mount
   useEffect(() => {
-    api.getBusinessProfile()
-      .then((res) => {
-        setProfile(res);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load profile:', err);
-        setLoading(false);
-      });
+    api.getStructuredBusinessProfile().then((data) => {
+      setProfile(data);
+      setEditForm(data);
+    });
   }, []);
 
+  // Pre-fill realistic demo data for 1-click test
+  const handlePreFillDemo = () => {
+    setCompanyName('CloudArmor AI');
+    setCompanyWebsite('https://cloudarmor.ai');
+    setBusinessDescription(
+      'Autonomous cloud security and continuous compliance automation for high-growth tech scaleups. We continuously monitor multi-cloud infrastructure for misconfigurations and least-privilege IAM risks, automatically opening tested Terraform pull requests to remediate issues.'
+    );
+    setProductsServices(
+      'CloudArmor Posture Guard (CSPM), AuditBot 360 (SOC 2/ISO Automation), Zero-Trust Identity Sentinel (CIEM)'
+    );
+    setTargetIndustries('FinTech & RegTech, Healthcare & MedTech, B2B SaaS, AI & Robotics');
+    setTargetLocations('North America, Europe (UK, Germany, France), Global Remote');
+    setIdealCustomerProfile(
+      'Series A to Pre-IPO tech scaleups with 40-1,000 employees running AWS/GCP/Kubernetes, actively pursuing SOC 2 Type II or ISO 27001 compliance.'
+    );
+  };
+
+  // Handle file selections
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selected = Array.from(e.target.files);
+      setUploadedFiles((prev) => [...prev, ...selected]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Trigger AI Business Understanding
+  const handleAnalyze = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyName.trim() || !businessDescription.trim()) {
+      alert('Please provide at least a Company Name and Business Description.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisStep('Ingesting company information & collateral documents...');
+
+    const stepTimer1 = setTimeout(() => {
+      setAnalysisStep('Synthesizing value propositions & target personas...');
+    }, 800);
+
+    const stepTimer2 = setTimeout(() => {
+      setAnalysisStep('Generating buying signals & ICP qualification criteria...');
+    }, 1600);
+
+    try {
+      const formData = new FormData();
+      formData.append('company_name', companyName);
+      formData.append('company_website', companyWebsite);
+      formData.append('business_description', businessDescription);
+      formData.append('products_services', productsServices);
+      formData.append('target_industries', targetIndustries);
+      formData.append('target_locations', targetLocations);
+      formData.append('ideal_customer_profile', idealCustomerProfile);
+
+      uploadedFiles.forEach((file) => {
+        formData.append('files', file);
+      });
+
+      const result = await api.analyzeBusiness(formData);
+      setProfile(result);
+      setEditForm(result);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Analysis failed:', err);
+    } finally {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      setIsAnalyzing(false);
+      setAnalysisStep('');
+    }
+  };
+
+  // Save edits
+  const handleSaveEdit = async () => {
+    if (!editForm) return;
+    setIsSaving(true);
+    try {
+      const updated = await api.updateStructuredBusinessProfile(editForm);
+      setProfile(updated);
+      setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-8 max-w-6xl mx-auto pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
             <Building2 className="w-6 h-6 text-indigo-600" />
-            <span>Business Profile & Product Offerings</span>
+            <span>Step 2: Business Understanding Engine</span>
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Defines the seller’s core products, value props, personas, and collateral used by the AI Agent to match leads and drive sales dialogue.
+            Feed your company details and collateral into the AI engine to generate an actionable B2B intelligence profile.
           </p>
         </div>
-        <button
-          onClick={() => {
-            api.resetBusinessProfile().then((res) => setProfile(res));
-          }}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-all"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-          <span>Reset Demo Defaults</span>
-        </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handlePreFillDemo}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Pre-fill Demo Scenario</span>
+          </button>
+        </div>
       </div>
 
-      {profile && (
-        <div className="space-y-6">
-          {/* Company Overview Card */}
-          <div className="bg-white rounded-xl border border-slate-200/90 p-6 shadow-xs">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wider">
-                  {profile.industry}
-                </span>
-                <h2 className="text-xl font-bold text-slate-900 mt-2">{profile.company_name}</h2>
-                <div className="text-xs text-indigo-600 font-medium mt-0.5">{profile.domain}</div>
-              </div>
-            </div>
+      {saveSuccess && (
+        <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>Business profile successfully analyzed and updated across the sales pipeline!</span>
+        </div>
+      )}
 
-            <p className="text-sm font-medium text-slate-700 mt-4 leading-relaxed bg-slate-50/80 p-3.5 rounded-lg border border-slate-200/60">
-              "{profile.headline}"
+      {/* Main Grid: Input Form & Extracted Profile */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Input Form (5 cols) */}
+        <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200/90 p-6 shadow-xs">
+          <div className="border-b border-slate-100 pb-4 mb-5">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>Business Knowledge Input</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Enter your core product offering details and upload sales collateral.
             </p>
-            <p className="text-xs text-slate-600 mt-3 leading-relaxed">
-              {profile.description}
-            </p>
-
-            {/* Value Propositions & Differentiators */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-100">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3 flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Core Value Propositions</span>
-                </h3>
-                <ul className="space-y-2">
-                  {profile.value_propositions.map((vp, i) => (
-                    <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
-                      <span>{vp}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Competitive Differentiators</span>
-                </h3>
-                <ul className="space-y-2">
-                  {profile.differentiators.map((diff, i) => (
-                    <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 shrink-0" />
-                      <span>{diff}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
           </div>
 
-          {/* Product Offerings Catalog */}
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-600" />
-              <span>Product Offerings ({profile.products.length})</span>
-            </h2>
+          <form onSubmit={handleAnalyze} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Company Name *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. CloudArmor AI"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              />
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {profile.products.map((prod) => (
-                <div
-                  key={prod.id}
-                  className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between hover:border-indigo-300 transition-all"
-                >
-                  <div>
-                    <div className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider mb-1">
-                      {prod.category}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">{prod.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1">{prod.tagline}</p>
-                    <p className="text-xs text-slate-600 mt-3">{prod.description}</p>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Company Website *
+              </label>
+              <input
+                type="url"
+                required
+                placeholder="https://cloudarmor.ai"
+                value={companyWebsite}
+                onChange={(e) => setCompanyWebsite(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+            </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-2">
-                        Target Pain Points:
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Business Description *
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder="What does your company do and what core problem does it solve?"
+                value={businessDescription}
+                onChange={(e) => setBusinessDescription(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all leading-relaxed"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Products / Services
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. CSPM, AuditBot 360, CIEM Sentinel"
+                value={productsServices}
+                onChange={(e) => setProductsServices(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Target Industries
+                </label>
+                <input
+                  type="text"
+                  placeholder="Fintech, SaaS, Healthcare"
+                  value={targetIndustries}
+                  onChange={(e) => setTargetIndustries(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Target Locations
+                </label>
+                <input
+                  type="text"
+                  placeholder="North America, Europe"
+                  value={targetLocations}
+                  onChange={(e) => setTargetLocations(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Ideal Customer Profile (ICP)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Series A/B scaleups with 50-500 employees running AWS/GCP"
+                value={idealCustomerProfile}
+                onChange={(e) => setIdealCustomerProfile(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
+              />
+            </div>
+
+            {/* Document Upload Area (PDF, DOCX, TXT) */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Sales Collateral & Case Studies (PDF, DOCX, TXT)
+              </label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/60 hover:bg-indigo-50/20 rounded-xl p-4 text-center cursor-pointer transition-all"
+              >
+                <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
+                <div className="text-xs font-semibold text-slate-700">
+                  Click to upload collateral files
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Supports .PDF, .DOCX, and .TXT</div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.docx,.txt"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              {/* Uploaded Files Chips */}
+              {uploadedFiles.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {uploadedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 bg-slate-100 rounded-lg text-xs"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="truncate text-slate-800 font-medium">{file.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          ({Math.round(file.size / 1024)} KB)
+                        </span>
                       </div>
-                      <ul className="space-y-1">
-                        {prod.target_pain_points.map((pt, i) => (
-                          <li key={i} className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                            <div className="w-1 h-1 rounded-full bg-slate-400" />
-                            <span>{pt}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        className="text-slate-400 hover:text-rose-600 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                  <div className="mt-5 pt-3 border-t border-slate-100">
-                    <div className="text-xs font-semibold text-slate-900">{prod.pricing_tier}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Ideal for: {prod.ideal_customer_size}</div>
+            {/* Submit Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={isAnalyzing}
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2"
+              >
+                <Sparkles className={`w-4 h-4 ${isAnalyzing ? 'animate-spin' : ''}`} />
+                <span>{isAnalyzing ? 'Analyzing Business Knowledge...' : 'Understand My Business'}</span>
+              </button>
+            </div>
+
+            {isAnalyzing && (
+              <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs text-indigo-900 flex items-center gap-2 animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-indigo-600 animate-ping shrink-0" />
+                <span>{analysisStep}</span>
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* Right Column: AI-Generated Understanding Display (7 cols) */}
+        <div className="lg:col-span-7 space-y-6">
+          {profile ? (
+            <div className="bg-white rounded-xl border border-slate-200/90 p-6 shadow-xs space-y-6">
+              {/* Header & Status */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-bold text-slate-900">{profile.company_name}</span>
+                    <a
+                      href={profile.company_website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-indigo-600 font-mono flex items-center gap-1 hover:underline"
+                    >
+                      <span>{profile.company_website}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant={profile.is_demo_mode ? 'purple' : 'success'} size="sm">
+                      <Sparkles className="w-3 h-3 mr-1 inline" />
+                      <span>{profile.is_demo_mode ? 'AI Extraction (Demo Mode)' : 'AI Extraction (Live LLM)'}</span>
+                    </Badge>
+                    <span className="text-[11px] text-slate-400">
+                      Last Updated: {profile.updated_at ? new Date(profile.updated_at).toLocaleTimeString() : 'Just now'}
+                    </span>
                   </div>
                 </div>
-              ))}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditForm({ ...profile });
+                    setIsEditing(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-all"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Edit Profile</span>
+                </button>
+              </div>
+
+              {/* 1. Company Summary */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Company Summary & Value Proposition</span>
+                </h3>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 leading-relaxed font-medium">
+                  {profile.company_summary}
+                </div>
+              </div>
+
+              {/* 2. Products & Services */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Extracted Products & Services ({profile.products_services.length})</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {profile.products_services.map((prod, i) => (
+                    <div
+                      key={i}
+                      className="p-3 bg-white rounded-lg border border-slate-200/90 text-xs font-semibold text-slate-800 flex items-center gap-2"
+                    >
+                      <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                      <span>{prod}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Target Customers & Personas */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Target Buyer Personas</span>
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {profile.target_customers.map((cust, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 text-xs font-medium"
+                    >
+                      {cust}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Industries & Locations */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                    <Globe2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Target Industries</span>
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.target_industries.map((ind, i) => (
+                      <span
+                        key={i}
+                        className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium"
+                      >
+                        {ind}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                    <Globe2 className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Target Locations</span>
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.target_locations.map((loc, i) => (
+                      <span
+                        key={i}
+                        className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium"
+                      >
+                        {loc}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Ideal Customer Profile */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Ideal Customer Profile (ICP Definition)</span>
+                </h3>
+                <div className="p-3.5 bg-amber-50/50 rounded-xl border border-amber-200/60 text-xs text-amber-900 leading-relaxed">
+                  {profile.ideal_customer_profile}
+                </div>
+              </div>
+
+              {/* 6. High-Intent Buying Signals */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                  <Radar className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Monitored Buying Signals</span>
+                </h3>
+                <div className="space-y-2">
+                  {profile.buying_signals.map((sig, i) => (
+                    <div
+                      key={i}
+                      className="p-2.5 rounded-lg bg-rose-50/40 border border-rose-100 text-xs text-slate-800 flex items-start gap-2"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                      <span>{sig}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 7. Search Keywords */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                  <Tags className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Search & Intent Keywords</span>
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.keywords.map((kw, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-medium font-mono"
+                    >
+                      #{kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-xs">
+              No profile analyzed yet. Enter details on the left and click "Understand My Business".
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Profile Modal */}
+      {isEditing && editForm && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Edit Business Intelligence Profile</h2>
+                <p className="text-xs text-slate-500">Fine-tune the AI-generated profile and saved parameters.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Company Summary</label>
+                <textarea
+                  rows={4}
+                  value={editForm.company_summary}
+                  onChange={(e) => setEditForm({ ...editForm, company_summary: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs leading-relaxed"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Products & Services (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.products_services.join(', ')}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      products_services: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Target Customers / Buyer Personas (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.target_customers.join(', ')}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      target_customers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Ideal Customer Profile (ICP)</label>
+                <textarea
+                  rows={2}
+                  value={editForm.ideal_customer_profile}
+                  onChange={(e) => setEditForm({ ...editForm, ideal_customer_profile: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Buying Signals to Monitor (comma-separated)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.buying_signals.join(', ')}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      buying_signals: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.keywords.join(', ')}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      keywords: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-200"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Saving Changes...' : 'Save Profile Edits'}</span>
+              </button>
             </div>
           </div>
         </div>
