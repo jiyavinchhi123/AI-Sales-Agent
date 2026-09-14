@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, JSON
 from app.core.database import Base
 
 
@@ -19,5 +19,11 @@ class CompanyProfile(Base):
     ideal_customer_profile = Column(Text, nullable=True)
     keywords = Column(JSON, default=list)
     buying_signals = Column(JSON, default=list)
+    sender_email = Column(String(255), nullable=True)
+    sender_name = Column(String(255), nullable=True)
+    smtp_host = Column(String(255), default="smtp.gmail.com")
+    smtp_port = Column(Integer, default=465)
+    smtp_username = Column(String(255), nullable=True)
+    smtp_password = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

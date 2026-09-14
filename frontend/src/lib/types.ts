@@ -72,6 +72,12 @@ export interface StructuredBusinessProfile {
   buying_signals: string[];
   is_demo_mode: boolean;
   source_files: string[];
+  sender_email?: string;
+  sender_name?: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_username?: string;
+  smtp_password?: string;
   updated_at?: string;
 }
 
@@ -304,10 +310,54 @@ export interface DashboardOverview {
   };
   funnel: Array<{
     stage: string;
+    label?: string;
     count: number;
     percentage: number;
+    dropoff_percentage?: number;
+    description?: string;
   }>;
   top_buying_signals: BuyingSignal[];
   high_priority_leads: Lead[];
   recent_opportunities: Opportunity[];
+  pipeline_health?: {
+    health_score: number;
+    health_label: string;
+    total_pipeline_value: string;
+    active_deals_count: number;
+    stage_breakdown: Array<{
+      stage: string;
+      count: number;
+      value: number;
+      formatted_value: string;
+      avg_win_rate: number;
+    }>;
+    signals_by_category: Array<{
+      category: string;
+      count: number;
+      percentage: number;
+    }>;
+    average_cycle_days: number;
+  };
+}
+
+export interface EmailDraftResponse {
+  lead_id: string;
+  recipient_name: string;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  tone: string;
+  matched_offering: string;
+  company_name: string;
+}
+
+export interface SendEmailResponse {
+  success: boolean;
+  real_sent?: boolean;
+  lead_id: string;
+  recipient_email: string;
+  subject: string;
+  status: string;
+  timestamp: string;
+  message: string;
 }

@@ -41,6 +41,18 @@ class BusinessService:
             row.ideal_customer_profile = profile_data.ideal_customer_profile
             row.keywords = profile_data.keywords
             row.buying_signals = profile_data.buying_signals
+            if profile_data.sender_email is not None:
+                row.sender_email = profile_data.sender_email
+            if profile_data.sender_name is not None:
+                row.sender_name = profile_data.sender_name
+            if profile_data.smtp_host is not None:
+                row.smtp_host = profile_data.smtp_host
+            if profile_data.smtp_port is not None:
+                row.smtp_port = profile_data.smtp_port
+            if profile_data.smtp_username is not None:
+                row.smtp_username = profile_data.smtp_username
+            if profile_data.smtp_password is not None:
+                row.smtp_password = profile_data.smtp_password
             row.updated_at = now
         else:
             row = CompanyProfile(
@@ -55,13 +67,36 @@ class BusinessService:
                 ideal_customer_profile=profile_data.ideal_customer_profile,
                 keywords=profile_data.keywords,
                 buying_signals=profile_data.buying_signals,
+                sender_email=profile_data.sender_email,
+                sender_name=profile_data.sender_name,
+                smtp_host=profile_data.smtp_host or "smtp.gmail.com",
+                smtp_port=profile_data.smtp_port or 465,
+                smtp_username=profile_data.smtp_username,
+                smtp_password=profile_data.smtp_password,
                 created_at=now,
                 updated_at=now,
             )
             db.add(row)
 
+        # Dynamically sync the User's display email and company_name with the business profile
+        from app.models.user import User
+        user_row = db.query(User).filter(User.id == user_id).first()
+        if user_row:
+            if profile_data.sender_email and profile_data.sender_email.strip():
+                user_row.email = profile_data.sender_email.strip()
+            if profile_data.company_name and profile_data.company_name.strip():
+                user_row.company_name = profile_data.company_name.strip()
+
         db.commit()
         db.refresh(row)
+
+        # Re-align default testing lead immediately to match the newly saved business profile
+        from app.services.lead_service import lead_service
+        try:
+            lead_service.ensure_demo_lead(db, user_id)
+        except Exception:
+            pass
+
         return self._to_schema(row)
 
     async def analyze_and_save_business(
@@ -99,6 +134,12 @@ class BusinessService:
 
         extracted.source_files = source_files_names
         extracted.is_demo_mode = False
+        if input_data.sender_email:
+            extracted.sender_email = input_data.sender_email
+        if input_data.sender_name:
+            extracted.sender_name = input_data.sender_name
+        elif input_data.company_name:
+            extracted.sender_name = input_data.company_name
 
         # Save to database
         return self.save_or_update_profile(user_id, extracted, db)
@@ -115,6 +156,12 @@ class BusinessService:
             ideal_customer_profile=row.ideal_customer_profile or "",
             keywords=row.keywords or [],
             buying_signals=row.buying_signals or [],
+            sender_email=getattr(row, "sender_email", None),
+            sender_name=getattr(row, "sender_name", None),
+            smtp_host=getattr(row, "smtp_host", "smtp.gmail.com") or "smtp.gmail.com",
+            smtp_port=getattr(row, "smtp_port", 465) or 465,
+            smtp_username=getattr(row, "smtp_username", None),
+            smtp_password=getattr(row, "smtp_password", None),
             is_demo_mode=False,
             source_files=[],
             updated_at=row.updated_at.isoformat() if row.updated_at else "",

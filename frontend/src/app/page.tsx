@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api';
 import { Lead, Opportunity, CallSession, DashboardOverview } from '@/lib/types';
 import { StatCardsGroup } from '@/components/dashboard/StatCardsGroup';
+import { ConversionFunnel } from '@/components/dashboard/ConversionFunnel';
 import { RecentOpportunities } from '@/components/dashboard/RecentOpportunities';
 import { RecentAICalls } from '@/components/dashboard/RecentAICalls';
 import { IntentDistribution } from '@/components/dashboard/IntentDistribution';
@@ -122,6 +123,9 @@ export default function DashboardPage() {
         qualified={qualifiedCount}
         interested={interestedCount}
       />
+
+      {/* 4-Stage Conversion Funnel: Signals ➔ Leads ➔ Outreach ➔ Deals */}
+      <ConversionFunnel funnel={overview?.funnel || []} />
 
       {/* Guided Onboarding Banner when database has 0 leads */}
       {leads.length === 0 && (

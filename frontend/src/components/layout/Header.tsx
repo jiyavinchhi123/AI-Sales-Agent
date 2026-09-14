@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 export const Header: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +30,23 @@ export const Header: React.FC = () => {
     api.checkHealth()
       .then(() => setBackendStatus('online'))
       .catch(() => setBackendStatus('online'));
-  }, []);
+
+    // Dynamically sync business email & company name with active user header
+    api.getStructuredBusinessProfile().then((data) => {
+      if (data) {
+        const updates: Partial<{ email: string; company_name: string }> = {};
+        if (data.sender_email && data.sender_email !== user?.email) {
+          updates.email = data.sender_email;
+        }
+        if (data.company_name && data.company_name !== user?.company_name) {
+          updates.company_name = data.company_name;
+        }
+        if (Object.keys(updates).length > 0) {
+          updateUser(updates);
+        }
+      }
+    });
+  }, [user?.email, user?.company_name]);
 
   // Close dropdowns on outside click
   useEffect(() => {

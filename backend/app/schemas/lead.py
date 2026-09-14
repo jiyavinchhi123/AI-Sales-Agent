@@ -68,3 +68,37 @@ class LeadFilter(BaseModel):
     grade: Optional[str] = None
     status: Optional[str] = None
     search: Optional[str] = None
+
+
+class EmailDraftRequest(BaseModel):
+    tone: Optional[str] = "direct"  # direct, consultative, executive
+    custom_instructions: Optional[str] = None
+
+
+class EmailDraftResponse(BaseModel):
+    lead_id: str
+    recipient_name: str
+    recipient_email: str
+    subject: str
+    body: str
+    tone: str
+    matched_offering: str
+    company_name: str
+
+
+class SendEmailRequest(BaseModel):
+    recipient_email: str
+    recipient_name: Optional[str] = None
+    subject: str
+    body: str
+    method: Optional[str] = "simulation"  # simulation, gmail, smtp
+
+
+class SendEmailResponse(BaseModel):
+    success: bool
+    lead_id: str
+    recipient_email: str
+    subject: str
+    status: str
+    timestamp: str
+    message: str

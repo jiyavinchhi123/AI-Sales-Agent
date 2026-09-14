@@ -20,15 +20,23 @@ import {
   ChevronRight,
   ShieldCheck,
   ExternalLink,
+  Mail,
+  Key,
+  Send,
+  Lock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { StructuredBusinessProfile } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BusinessProfilePage() {
+  const { updateUser } = useAuth();
+
   // Form Inputs
   const [companyName, setCompanyName] = useState('');
   const [companyWebsite, setCompanyWebsite] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
   const [businessDescription, setBusinessDescription] = useState('');
   const [productsServices, setProductsServices] = useState('');
   const [targetIndustries, setTargetIndustries] = useState('');
@@ -45,13 +53,47 @@ export default function BusinessProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Real Email Dispatch Testing State
+  const [testEmailTarget, setTestEmailTarget] = useState('');
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleTestEmail = async () => {
+    const target = testEmailTarget.trim() || editForm?.sender_email || profile?.sender_email || 'jiyacrafthub@gmail.com';
+    setIsTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const res = await api.testEmailConnection({
+        recipient_email: target,
+        sender_email: editForm?.sender_email || profile?.sender_email,
+        smtp_password: editForm?.smtp_password || profile?.smtp_password,
+        smtp_port: editForm?.smtp_port || profile?.smtp_port || 465,
+        smtp_host: editForm?.smtp_host || profile?.smtp_host || 'smtp.gmail.com',
+      });
+      setTestEmailResult(res);
+      if (res.success) {
+        api.getStructuredBusinessProfile().then((data) => {
+          if (data) setProfile(data);
+        });
+      }
+    } catch (err: any) {
+      setTestEmailResult({ success: false, message: err.message || 'SMTP connection failed.' });
+    } finally {
+      setIsTestingEmail(false);
+    }
+  };
 
   // Load existing profile on mount
   useEffect(() => {
     api.getStructuredBusinessProfile().then((data) => {
       setProfile(data);
       setEditForm(data);
+      if (data?.sender_email) {
+        setCompanyEmail(data.sender_email);
+        updateUser({ email: data.sender_email, company_name: data.company_name });
+      }
     });
   }, []);
 
@@ -59,6 +101,7 @@ export default function BusinessProfilePage() {
   const handlePreFillDemo = () => {
     setCompanyName('Siyarang Bandhej');
     setCompanyWebsite('https://siyarangbandhej.com');
+    setCompanyEmail('sales@siyarangbandhej.com');
     setBusinessDescription(
       'Heritage artisan manufacturer of authentic Kutch and Jamnagar Bandhani, handcrafted pure Gaji silk sarees, traditional tie-dye dupattas, and bridal lehenga fabrics. Supplying premium ethnic wear retail chains, luxury boutiques, and global export houses.'
     );
@@ -112,6 +155,8 @@ export default function BusinessProfilePage() {
       formData.append('target_industries', targetIndustries);
       formData.append('target_locations', targetLocations);
       formData.append('ideal_customer_profile', idealCustomerProfile);
+      formData.append('sender_email', companyEmail);
+      formData.append('sender_name', companyName);
 
       uploadedFiles.forEach((file) => {
         formData.append('files', file);
@@ -120,6 +165,9 @@ export default function BusinessProfilePage() {
       const result = await api.analyzeBusiness(formData);
       setProfile(result);
       setEditForm(result);
+      if (result.sender_email) {
+        updateUser({ email: result.sender_email, company_name: result.company_name });
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -140,6 +188,9 @@ export default function BusinessProfilePage() {
       const updated = await api.updateStructuredBusinessProfile(editForm);
       setProfile(updated);
       setIsEditing(false);
+      if (updated.sender_email) {
+        updateUser({ email: updated.sender_email, company_name: updated.company_name });
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -222,6 +273,23 @@ export default function BusinessProfilePage() {
                 onChange={(e) => setCompanyWebsite(e.target.value)}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center justify-between">
+                <span>Company Email (Outbound Sender)</span>
+                <span className="text-[10px] text-indigo-600 font-normal normal-case">Used for lead outreach</span>
+              </label>
+              <input
+                type="email"
+                placeholder="e.g. sales@siyarangbandhej.com or info@yourcompany.com"
+                value={companyEmail}
+                onChange={(e) => setCompanyEmail(e.target.value)}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                Any company can enter their email here. AI will send outreach emails to prospective leads from this address.
+              </span>
             </div>
 
             <div>
@@ -540,6 +608,54 @@ export default function BusinessProfilePage() {
                   ))}
                 </div>
               </div>
+
+              {/* 8. Outbound Email & Direct Dispatch Configuration */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Outbound Email Dispatch Settings (Real Inbox Delivery)</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm({ ...profile });
+                      setIsEditing(true);
+                    }}
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                  >
+                    Configure Email
+                  </button>
+                </div>
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Sender Email Address</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        {profile.sender_email || 'Not configured'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Sender Display Name</span>
+                      <span className="font-semibold text-slate-800">
+                        {profile.sender_name || profile.company_name}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">SMTP Server</span>
+                      <span className="font-mono text-slate-700">
+                        {profile.smtp_host || 'smtp.gmail.com'}:{profile.smtp_port || 465}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Password Status</span>
+                      <span className={profile.smtp_password ? 'text-emerald-700 font-bold' : 'text-amber-700 font-medium'}>
+                        {profile.smtp_password ? '✓ Configured for Direct Live Dispatch' : '⚠️ Google App Password Required'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-xs">
@@ -654,6 +770,158 @@ export default function BusinessProfilePage() {
                   }
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
                 />
+              </div>
+
+              {/* Outbound Email & SMTP Settings */}
+              <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  <Mail className="w-4 h-4 text-indigo-600" />
+                  <span>Outbound Email Dispatch Settings (Real Inbox Delivery)</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Configure your sender email address and Google App Password so emails are sent directly to customer inboxes in real time.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Sender Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. jiyacrafthub@gmail.com"
+                      value={editForm.sender_email || ''}
+                      onChange={(e) => setEditForm({ ...editForm, sender_email: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Sender Display Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SiyaRang Bandhej Sourcing"
+                      value={editForm.sender_name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, sender_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span>Google App Password (16-letters)</span>
+                        {(() => {
+                          const len = (editForm.smtp_password || '').replace(/\s+/g, '').length;
+                          if (len === 0) return null;
+                          return (
+                            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                              len === 16 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {len} / 16 letters
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <a
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5"
+                      >
+                        <span>Generate 16-Letter Password</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="16-letter password e.g. abcd efgh ijkl mnop"
+                      value={editForm.smtp_password || ''}
+                      onChange={(e) => setEditForm({ ...editForm, smtp_password: e.target.value })}
+                      className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-mono transition-all ${
+                        (editForm.smtp_password || '').replace(/\s+/g, '').length === 16
+                          ? 'border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                          : (editForm.smtp_password || '').replace(/\s+/g, '').length > 0
+                          ? 'border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                          : 'border-slate-200'
+                      }`}
+                    />
+                    {(() => {
+                      const cleanLen = (editForm.smtp_password || '').replace(/\s+/g, '').length;
+                      if (cleanLen === 0) return null;
+                      if (cleanLen === 16) {
+                        return (
+                          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>✓ Exact 16-letter App Password format. Ready for direct inbox delivery!</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-normal space-y-1">
+                          <div className="font-bold flex items-center gap-1 text-amber-800">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Currently {cleanLen} characters (Needs exactly 16 letters)</span>
+                          </div>
+                          <p className="text-[10.5px] text-amber-800">
+                            Normal Gmail account login passwords trigger <strong>535 BadCredentials</strong>. Google requires a dedicated 16-letter <em>App Password</em>:
+                          </p>
+                          <ol className="list-decimal list-inside text-[10px] text-slate-700 space-y-0.5 pt-0.5 font-medium">
+                            <li>Ensure <strong>2-Step Verification</strong> is ON for your Google account.</li>
+                            <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">myaccount.google.com/apppasswords</a>.</li>
+                            <li>Type App name &ldquo;Sales Agent&rdquo; and click <strong>Create</strong>.</li>
+                            <li>Copy the generated <strong>16-letter code</strong> and paste it here.</li>
+                          </ol>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">SMTP Port</label>
+                    <input
+                      type="number"
+                      value={editForm.smtp_port || 465}
+                      onChange={(e) => setEditForm({ ...editForm, smtp_port: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Test Connection Box */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <span className="text-[11px] font-bold text-slate-700 block">Test Email Dispatch</span>
+                    <input
+                      type="email"
+                      placeholder="Enter email to test (e.g. jiyacrafthub@gmail.com)"
+                      value={testEmailTarget}
+                      onChange={(e) => setTestEmailTarget(e.target.value)}
+                      className="mt-1 w-full px-2.5 py-1 bg-white border border-slate-200 rounded text-xs"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isTestingEmail}
+                    onClick={handleTestEmail}
+                    className="self-end px-3 py-1.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded text-xs font-bold flex items-center gap-1"
+                  >
+                    {isTestingEmail ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    <span>Test Send</span>
+                  </button>
+                </div>
+
+                {testEmailResult && (
+                  <div
+                    className={`p-2.5 rounded-lg text-xs font-medium border ${
+                      testEmailResult.success
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}
+                  >
+                    {testEmailResult.message}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string, companyName?: string) => Promise<void>;
   logout: () => void;
+  updateUser: (partialUser: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,6 +64,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   }, []);
+
+  const updateUser = (partialUser: Partial<User>) => {
+    setUser((prev) => {
+      const baseUser: User = prev || {
+        id: 'workspace-user',
+        email: partialUser.email || 'user@workspace.ai',
+        full_name: partialUser.full_name || 'Sales User',
+        company_name: partialUser.company_name || 'My Workspace',
+      };
+      const updated = { ...baseUser, ...partialUser };
+      try {
+        localStorage.setItem('sales_agent_user', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
 
   const login = async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/login`, {
@@ -131,7 +148,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, isLoading, pathname, router]);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

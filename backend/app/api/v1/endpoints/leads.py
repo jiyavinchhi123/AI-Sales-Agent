@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_optional_current_user
 from app.models.user import User
-from app.schemas.lead import Lead, OfferingMatch, IntentScore
+from app.schemas.lead import (
+    Lead, OfferingMatch, IntentScore,
+    EmailDraftRequest, EmailDraftResponse,
+    SendEmailRequest, SendEmailResponse
+)
 from app.services.lead_service import lead_service
 
 router = APIRouter()
@@ -69,3 +73,53 @@ def update_lead_status(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+@router.post("/{lead_id}/email-draft", response_model=EmailDraftResponse)
+def generate_email_draft(
+    lead_id: str,
+    req: EmailDraftRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate hyper-personalized AI cold outreach email draft."""
+    user_id = _get_user_id(current_user, db)
+    try:
+        draft = lead_service.generate_email_draft(
+            db=db,
+            user_id=user_id,
+            lead_id=lead_id,
+            tone=req.tone or "direct",
+            custom_instructions=req.custom_instructions,
+        )
+        return draft
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate email draft: {str(e)}")
+
+
+@router.post("/{lead_id}/send-email", response_model=SendEmailResponse)
+def send_email(
+    lead_id: str,
+    req: SendEmailRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """Dispatch or simulate AI cold email and record activity in lead dossier."""
+    user_id = _get_user_id(current_user, db)
+    try:
+        result = lead_service.record_email_sent(
+            db=db,
+            user_id=user_id,
+            lead_id=lead_id,
+            recipient_email=req.recipient_email,
+            subject=req.subject,
+            body=req.body,
+            method=req.method or "simulation",
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")

@@ -11,6 +11,8 @@ import {
   DashboardOverview,
   OfferingMatch,
   IntentScore,
+  EmailDraftResponse,
+  SendEmailResponse,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -147,6 +149,16 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  testEmailConnection: (
+    payload: { recipient_email: string; sender_email?: string; smtp_password?: string; smtp_port?: number; smtp_host?: string } | string
+  ): Promise<{ success: boolean; message: string }> => {
+    const body = typeof payload === 'string' ? { recipient_email: payload } : payload;
+    return request<{ success: boolean; message: string }>('/business/test-email', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
   // Step 3: Lead & Buying Requirement Discovery
   discoverLeads: async (filters?: DiscoveryFilters): Promise<DiscoveredOpportunity[]> => {
     const query = new URLSearchParams();
@@ -189,6 +201,22 @@ export const api = {
   updateLeadStatus: (leadId: string, status: string): Promise<Lead> =>
     request<Lead>(`/leads/${leadId}/status?status=${encodeURIComponent(status)}`, {
       method: 'PUT',
+    }),
+
+  // AI Email Outreach
+  getEmailDraft: (leadId: string, tone: string = 'direct', customInstructions?: string): Promise<EmailDraftResponse> =>
+    request<EmailDraftResponse>(`/leads/${leadId}/email-draft`, {
+      method: 'POST',
+      body: JSON.stringify({ tone, custom_instructions: customInstructions }),
+    }),
+
+  sendLeadEmail: (
+    leadId: string,
+    data: { recipient_email: string; subject: string; body: string; method?: string; recipient_name?: string }
+  ): Promise<SendEmailResponse> =>
+    request<SendEmailResponse>(`/leads/${leadId}/send-email`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
   // AI Calling

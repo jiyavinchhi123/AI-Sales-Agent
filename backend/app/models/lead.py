@@ -24,4 +24,6 @@ class Lead(Base):
     matched_offering = Column(String(255), nullable=True)
     status = Column(String(50), default="New")  # New, Contacted, Interested, Opportunity, Closed
     notes = Column(Text, nullable=True)
+    contact_name = Column(String(255), nullable=True)
+    contact_email = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

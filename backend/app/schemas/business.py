@@ -58,6 +58,8 @@ class BusinessAnalyzeInput(BaseModel):
     target_industries: Optional[str] = ""
     target_locations: Optional[str] = ""
     ideal_customer_profile: Optional[str] = ""
+    sender_email: Optional[str] = ""
+    sender_name: Optional[str] = ""
 
 
 class StructuredBusinessProfile(BaseModel):
@@ -73,4 +75,10 @@ class StructuredBusinessProfile(BaseModel):
     buying_signals: List[str] = Field(default_factory=list)
     is_demo_mode: bool = True
     source_files: List[str] = Field(default_factory=list)
+    sender_email: Optional[str] = None
+    sender_name: Optional[str] = None
+    smtp_host: Optional[str] = "smtp.gmail.com"
+    smtp_port: Optional[int] = 465
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     updated_at: str = ""
