@@ -321,8 +321,11 @@ export default function AICallingPage() {
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6 relative overflow-hidden">
                 {/* Top Status Header */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold tracking-widest uppercase text-slate-400">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg overflow-hidden border border-indigo-100 shadow-xs bg-white shrink-0">
+                      <img src="/logo.png" alt="AI Sales Agent" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-xs font-bold tracking-widest uppercase text-slate-600">
                       AI SALES AGENT
                     </span>
                   </div>
@@ -343,6 +346,17 @@ export default function AICallingPage() {
 
                 {/* Main Call Subject / Current Turn Banner */}
                 <div className="bg-slate-50/80 rounded-2xl border border-slate-200/80 p-6 text-center space-y-3">
+                  <div className="flex justify-center">
+                    <div className="relative w-16 h-16 rounded-2xl p-1 bg-white shadow-md border border-indigo-100 flex items-center justify-center">
+                      <img src="/logo.png" alt="AI Agent Voice" className="w-full h-full object-cover rounded-xl" />
+                      {activeSession.status !== 'Completed' && (
+                        <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <div className="text-xs font-bold uppercase tracking-wider text-indigo-600">
                     AI Sales Agent Speaking
                   </div>
@@ -409,117 +423,129 @@ export default function AICallingPage() {
                   <div className="border-t border-slate-100 pt-4 space-y-3">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Quick Demo Dialogue Responses:
+                        Quick Unpredictable Prospect Responses:
                       </span>
                       <span className="text-[11px] text-slate-400">
-                        Click to advance qualification stage
+                        Click any response to test dynamic AI reasoning
                       </span>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {currentStage === 'greeting' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Yes.')}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
-                          >
-                            &ldquo;Yes.&rdquo;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Yes, what is this regarding?')}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                          >
-                            &ldquo;Yes, what is this regarding?&rdquo;
-                          </button>
-                        </>
-                      )}
-
-                      {currentStage === 'need' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleSendResponse(
-                                'We need help migrating our existing documents to SharePoint.'
-                              )
-                            }
-                            className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
-                          >
-                            &ldquo;We need help migrating our existing documents to SharePoint.&rdquo;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleSendResponse('We need ongoing cloud and IT infrastructure support.')
-                            }
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                          >
-                            &ldquo;We need ongoing cloud and IT support.&rdquo;
-                          </button>
-                        </>
-                      )}
-
-                      {currentStage === 'scope' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Around 500 users.')}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
-                          >
-                            &ldquo;Around 500 users.&rdquo;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('About 100 team members in our division.')}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                          >
-                            &ldquo;About 100 team members.&rdquo;
-                          </button>
-                        </>
-                      )}
-
-                      {currentStage === 'timeline' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Within the next two months.')}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
-                          >
-                            &ldquo;Within the next two months.&rdquo;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Starting next quarter.')}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                          >
-                            &ldquo;Starting next quarter.&rdquo;
-                          </button>
-                        </>
-                      )}
-
-                      {currentStage === 'closing' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleSendResponse('Yes.')}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all"
-                          >
-                            &ldquo;Yes, let&apos;s schedule a discussion.&rdquo;
-                          </button>
-                        </>
-                      )}
-
-                      {/* Common Objection Tests */}
+                      {/* User's exact test cases */}
                       <button
                         type="button"
-                        onClick={() =>
-                          handleSendResponse('Our budget is currently under review for this quarter.')
-                        }
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs transition-all"
+                        onClick={() => handleSendResponse('What is your GST registration number?')}
+                        className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition-all"
                       >
-                        [Objection: Budget Review]
+                        &ldquo;What is your GST registration number?&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('Where is your factory located?')}
+                        className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;Where is your factory located?&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('Khambhalia')}
+                        className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;Khambhalia&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('I need cotton bandhani suits. are you selling it')}
+                        className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;I need cotton bandhani suits. are you selling it&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('Send it to jiyacrafthub@gmail.com')}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;Send it to jiyacrafthub@gmail.com&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('i want to see you products is it available on online site')}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;i want to see you products is it available on online site&rdquo;
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('What products do you offer?')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
+                      >
+                        [Ask: Products]
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('What is your website?')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
+                      >
+                        [Ask: Website]
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('Where is your factory located?')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
+                      >
+                        [Ask: Factory Location]
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('What is your wholesale pricing and MOQ?')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
+                      >
+                        [Ask: Pricing & MOQ]
+                      </button>
+
+                      {/* 3. Unknown question (AI must say unavailable instead of inventing) */}
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('What is your GST registration number?')}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-medium transition-all"
+                      >
+                        [Test: Unknown Question]
+                      </button>
+
+                      {/* 4. New Volume & Timeline */}
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('We need 400 pieces delivered by next month.')}
+                        className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all"
+                      >
+                        &ldquo;400 pieces by next month&rdquo;
+                      </button>
+
+                      {/* 5. Correction / Confusion handling */}
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse("You're not getting what I'm telling.")}
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs transition-all"
+                      >
+                        [Test: Correction / Misunderstanding]
+                      </button>
+
+                      {/* 6. Opt Out */}
+                      <button
+                        type="button"
+                        onClick={() => handleSendResponse('I am not interested, please remove me.')}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs transition-all"
+                      >
+                        [Test: Not Interested]
                       </button>
                     </div>
 
@@ -653,7 +679,12 @@ export default function AICallingPage() {
                         key={t.id || index}
                         className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}
                       >
-                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-1">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-1">
+                          {isAI && (
+                            <div className="w-4 h-4 rounded-full overflow-hidden border border-indigo-200 shrink-0">
+                              <img src="/logo.png" alt="AI" className="w-full h-full object-cover" />
+                            </div>
+                          )}
                           <span>{isAI ? 'AI Sales Agent' : activeSession.contact_name}</span>
                           <span>•</span>
                           <span>+{t.timestamp_offset_seconds}s</span>
@@ -676,7 +707,9 @@ export default function AICallingPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-xs shadow-xs">
-              <PhoneCall className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50/50 border border-indigo-100 p-2 mx-auto mb-3 flex items-center justify-center shadow-xs">
+                <img src="/logo.png" alt="AI Sales Agent" className="w-full h-full object-cover rounded-xl" />
+              </div>
               <div className="font-bold text-slate-700 text-sm">No Call Session Selected</div>
               <div className="text-slate-500 mt-1">
                 Select an active lead from the left column and click &ldquo;Call&rdquo; to begin a dynamic qualification demo.

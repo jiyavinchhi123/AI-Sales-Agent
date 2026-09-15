@@ -33,15 +33,19 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0 z-30 select-none">
       {/* Brand Header */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
-          <Sparkles className="w-5 h-5" />
+      <div className="h-16 flex items-center px-5 border-b border-slate-100 gap-3">
+        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-xs border border-indigo-100 bg-white flex items-center justify-center shrink-0">
+          <img
+            src="/logo.png"
+            alt="AI Sales Agent Logo"
+            className="w-full h-full object-cover"
+          />
         </div>
         <div>
           <div className="font-bold text-sm tracking-tight text-slate-900 flex items-center gap-1.5">
             AI Sales Agent
           </div>
-          <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+          <div className="text-[10.5px] font-medium text-slate-500 uppercase tracking-wider">
             Signal to Opportunity
           </div>
         </div>

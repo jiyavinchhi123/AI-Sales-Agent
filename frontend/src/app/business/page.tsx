@@ -24,11 +24,133 @@ import {
   Key,
   Send,
   Lock,
+  HelpCircle,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { StructuredBusinessProfile } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
+
+const EmailConfigurationGuide: React.FC<{ className?: string }> = ({ className = '' }) => {
+  return (
+    <div
+      className={`bg-gradient-to-br from-indigo-50/90 via-slate-50 to-blue-50/80 rounded-xl border border-indigo-200/90 p-4 space-y-3 ${className}`}
+    >
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
+            <Key className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-slate-900">
+              How to Configure Google App Password (4 Simple Steps)
+            </h4>
+            <p className="text-[10.5px] text-slate-500">
+              Required by Google for automated SMTP inbox delivery without exposing personal passwords
+            </p>
+          </div>
+        </div>
+        <a
+          href="https://myaccount.google.com/apppasswords"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold shadow-2xs transition-all hover:border-indigo-300 cursor-pointer"
+        >
+          <span>Open Google App Passwords</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        <div className="flex items-start gap-2.5 bg-white/95 p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+            1
+          </span>
+          <div>
+            <strong className="text-slate-800 text-[11px] block">Turn ON 2-Step Verification</strong>
+            <p className="text-slate-500 text-[10.5px] leading-relaxed mt-0.5">
+              Open{' '}
+              <a
+                href="https://myaccount.google.com/security"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 underline font-medium"
+              >
+                Google Security
+              </a>{' '}
+              and confirm 2-Step Verification is active on your Google account.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2.5 bg-white/95 p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+            2
+          </span>
+          <div>
+            <strong className="text-slate-800 text-[11px] block">Go to App Passwords Page</strong>
+            <p className="text-slate-500 text-[10.5px] leading-relaxed mt-0.5">
+              Visit{' '}
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 underline font-bold"
+              >
+                myaccount.google.com/apppasswords
+              </a>
+              .
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2.5 bg-white/95 p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+            3
+          </span>
+          <div>
+            <strong className="text-slate-800 text-[11px] block">
+              Create Password for &ldquo;Sales Agent&rdquo;
+            </strong>
+            <p className="text-slate-500 text-[10.5px] leading-relaxed mt-0.5">
+              Under <em>App name</em>, enter{' '}
+              <code className="bg-slate-100 px-1 py-0.2 rounded font-mono text-slate-800 font-bold">
+                Sales Agent
+              </code>{' '}
+              and click <strong>Create</strong>.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2.5 bg-white/95 p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+          <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+            4
+          </span>
+          <div>
+            <strong className="text-slate-800 text-[11px] block">Copy & Paste 16-Letter Code</strong>
+            <p className="text-slate-500 text-[10.5px] leading-relaxed mt-0.5">
+              Copy the yellow box 16-letter code (e.g.{' '}
+              <span className="font-mono font-bold text-slate-700">abcd efgh ijkl mnop</span>) and paste
+              it into the password field below.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-[10.5px] text-slate-600 bg-white/70 px-3 py-2 rounded-lg border border-slate-200/60">
+        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+        <span>
+          <strong>Why not standard password?</strong> Google blocks third-party automated logins with{' '}
+          <em>535 BadCredentials</em>. The 16-letter App Password ensures emails land safely in
+          customers&apos; primary inboxes.
+        </span>
+      </div>
+    </div>
+  );
+};
 
 export default function BusinessProfilePage() {
   const { updateUser } = useAuth();
@@ -57,6 +179,7 @@ export default function BusinessProfilePage() {
   const [testEmailTarget, setTestEmailTarget] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showEmailGuide, setShowEmailGuide] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -204,14 +327,18 @@ export default function BusinessProfilePage() {
     <div className="space-y-8 max-w-6xl mx-auto pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
-            <Building2 className="w-6 h-6 text-indigo-600" />
-            <span>Step 2: Business Understanding Engine</span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Feed your company details and collateral into the AI engine to generate an actionable B2B intelligence profile.
-          </p>
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-white border border-indigo-100 shadow-sm p-1 shrink-0 flex items-center justify-center">
+            <img src="/logo.png" alt="Business Profile" className="w-full h-full object-cover rounded-lg" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Step 2: Business Understanding Engine
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Feed your company details and collateral into the AI engine to generate an actionable B2B intelligence profile.
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -611,22 +738,36 @@ export default function BusinessProfilePage() {
 
               {/* 8. Outbound Email & Direct Dispatch Configuration */}
               <div className="pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Outbound Email Dispatch Settings (Real Inbox Delivery)</span>
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditForm({ ...profile });
-                      setIsEditing(true);
-                    }}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
-                  >
-                    Configure Email
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailGuide(!showEmailGuide)}
+                      className="text-[11px] text-slate-600 hover:text-indigo-600 font-medium flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-indigo-50 px-2 py-0.5 rounded border border-slate-200 transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>{showEmailGuide ? 'Hide Setup Steps' : 'How to Configure?'}</span>
+                      {showEmailGuide ? <ChevronUp className="w-3 h-3 text-slate-400" /> : <ChevronDown className="w-3 h-3 text-slate-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditForm({ ...profile });
+                        setIsEditing(true);
+                      }}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                    >
+                      Configure Email
+                    </button>
+                  </div>
                 </div>
+                {showEmailGuide && (
+                  <EmailConfigurationGuide className="mb-3" />
+                )}
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
@@ -782,6 +923,9 @@ export default function BusinessProfilePage() {
                   Configure your sender email address and Google App Password so emails are sent directly to customer inboxes in real time.
                 </p>
 
+                {/* Step-by-Step Configuration Guide */}
+                <EmailConfigurationGuide />
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Sender Email Address</label>
@@ -848,7 +992,14 @@ export default function BusinessProfilePage() {
                     />
                     {(() => {
                       const cleanLen = (editForm.smtp_password || '').replace(/\s+/g, '').length;
-                      if (cleanLen === 0) return null;
+                      if (cleanLen === 0) {
+                        return (
+                          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                            <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <span>Follow the 4 steps above to generate and paste your 16-letter App Password.</span>
+                          </div>
+                        );
+                      }
                       if (cleanLen === 16) {
                         return (
                           <div className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
@@ -864,14 +1015,8 @@ export default function BusinessProfilePage() {
                             <span>Currently {cleanLen} characters (Needs exactly 16 letters)</span>
                           </div>
                           <p className="text-[10.5px] text-amber-800">
-                            Normal Gmail account login passwords trigger <strong>535 BadCredentials</strong>. Google requires a dedicated 16-letter <em>App Password</em>:
+                            Normal Gmail login passwords trigger <strong>535 BadCredentials</strong>. Please copy the 16-letter App Password from Step 4 above.
                           </p>
-                          <ol className="list-decimal list-inside text-[10px] text-slate-700 space-y-0.5 pt-0.5 font-medium">
-                            <li>Ensure <strong>2-Step Verification</strong> is ON for your Google account.</li>
-                            <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">myaccount.google.com/apppasswords</a>.</li>
-                            <li>Type App name &ldquo;Sales Agent&rdquo; and click <strong>Create</strong>.</li>
-                            <li>Copy the generated <strong>16-letter code</strong> and paste it here.</li>
-                          </ol>
                         </div>
                       );
                     })()}

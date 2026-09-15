@@ -249,19 +249,50 @@ export interface CallSession {
   battlecards_used: ObjectionBattlecard[];
 }
 
+export interface CadenceStep {
+  step: number;
+  channel: string;
+  timing: string;
+  action: string;
+}
+
 export interface Campaign {
   id: string;
+  user_id?: string;
   name: string;
   description: string;
   target_criteria: string;
   status: string;
   channels: string[];
+  tone?: string;
+  cadence_steps?: CadenceStep[];
   total_leads: number;
   contacted_count: number;
   interested_count: number;
   scheduled_meetings: number;
   response_rate: number;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface CampaignCreateInput {
+  name: string;
+  description?: string;
+  target_criteria?: string;
+  channels: string[];
+  tone?: string;
+  target_intent?: string;
+}
+
+export interface CampaignLaunchResponse {
+  success: boolean;
+  campaign_id: string;
+  campaign_name: string;
+  status: string;
+  leads_enrolled: number;
+  emails_dispatched: number;
+  calls_initiated: number;
+  message: string;
 }
 
 export interface NextBestAction {

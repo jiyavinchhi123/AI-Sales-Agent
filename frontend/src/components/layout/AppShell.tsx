@@ -20,8 +20,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 animate-bounce mb-3">
-          <Bot className="w-8 h-8 text-white" />
+        <div className="w-16 h-16 rounded-2xl bg-white shadow-lg shadow-indigo-100 border border-indigo-100 p-1.5 animate-bounce mb-3 overflow-hidden flex items-center justify-center">
+          <img src="/logo.png" alt="AI Sales Agent Logo" className="w-full h-full object-cover rounded-xl" />
         </div>
         <p className="text-sm font-semibold text-slate-700">Loading AI Sales Agent...</p>
       </div>

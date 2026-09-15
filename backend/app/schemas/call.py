@@ -28,6 +28,8 @@ class CallInsights(BaseModel):
     timeline: Optional[str] = "Not available"
     budget: Optional[str] = "Not disclosed"
     authority: Optional[str] = "Not available"
+    target_location: Optional[str] = None
+    delivery_location: Optional[str] = None
     intent_score: int = Field(default=90, ge=0, le=100)
     next_best_action: str = "Schedule technical discussion"
     extracted_pain_points: List[str] = Field(default_factory=list)

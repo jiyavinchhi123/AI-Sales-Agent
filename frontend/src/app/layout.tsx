@@ -6,6 +6,9 @@ import { AppShell } from '@/components/layout/AppShell';
 export const metadata: Metadata = {
   title: 'AI Sales Agent — Signal to Opportunity',
   description: 'Autonomous B2B Sales Platform: Buying Signals, Lead Scoring, AI Calling, and CRM Handoff',
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 export default function RootLayout({

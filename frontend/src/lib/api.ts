@@ -7,6 +7,8 @@ import {
   Lead,
   CallSession,
   Campaign,
+  CampaignCreateInput,
+  CampaignLaunchResponse,
   Opportunity,
   DashboardOverview,
   OfferingMatch,
@@ -260,6 +262,28 @@ export const api = {
       return [];
     }
   },
+
+  createCampaign: (data: CampaignCreateInput): Promise<Campaign> =>
+    request<Campaign>('/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  launchCampaign: (campaignId: string): Promise<CampaignLaunchResponse> =>
+    request<CampaignLaunchResponse>(`/campaigns/${campaignId}/launch`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  toggleCampaignStatus: (campaignId: string): Promise<Campaign> =>
+    request<Campaign>(`/campaigns/${campaignId}/toggle`, {
+      method: 'POST',
+    }),
+
+  deleteCampaign: (campaignId: string): Promise<{ message: string; campaign_id: string }> =>
+    request<{ message: string; campaign_id: string }>(`/campaigns/${campaignId}`, {
+      method: 'DELETE',
+    }),
 
   // Opportunities & CRM
   getOpportunities: async (): Promise<Opportunity[]> => {

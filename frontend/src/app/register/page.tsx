@@ -37,8 +37,8 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="inline-flex items-center justify-center p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 mb-4">
-          <Bot className="w-8 h-8 text-white" />
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-lg shadow-indigo-100 border border-indigo-100 mb-4 p-1.5 overflow-hidden">
+          <img src="/logo.png" alt="AI Sales Agent Logo" className="w-full h-full object-cover rounded-xl" />
         </div>
         <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
           Create Your Workspace
