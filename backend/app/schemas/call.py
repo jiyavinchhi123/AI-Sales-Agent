@@ -20,21 +20,29 @@ class ObjectionBattlecard(BaseModel):
 
 class CallInsights(BaseModel):
     summary: str
-    sentiment_overall: str = "Positive"  # Positive, Enthusiastic, Skeptical, Guarded, Disinterested
-    interest_level: str = "High"  # High, Medium, Low
-    urgency: str = "High"  # High, Moderate, Low
+    sentiment_overall: str = "Neutral"
+    engagement: str = "Not available"  # High, Medium, Low, Disengaged, Not available
+    intent_level: str = "Not available"  # High Intent, Evaluating, Inquiring, Disinterested, Not available
+    intent_score: Optional[int] = Field(default=None, ge=0, le=100)
+    interest_level: str = "Not available"
+    urgency: str = "Not available"
     need: Optional[str] = "Not available"
+    product_service: Optional[str] = "Not available"
+    scope_quantity: Optional[str] = "Not available"
     scope_users: Optional[str] = "Not available"
     timeline: Optional[str] = "Not available"
     budget: Optional[str] = "Not disclosed"
     authority: Optional[str] = "Not available"
     target_location: Optional[str] = None
     delivery_location: Optional[str] = None
-    intent_score: int = Field(default=90, ge=0, le=100)
-    next_best_action: str = "Schedule technical discussion"
+    pain_points: List[str] = Field(default_factory=list)
     extracted_pain_points: List[str] = Field(default_factory=list)
+    objections: List[str] = Field(default_factory=list)
     objections_handled: List[str] = Field(default_factory=list)
-    qualification_verdict: str = "Interested"  # Interested, Neutral, Disqualified
+    customer_questions: List[str] = Field(default_factory=list)
+    important_info: List[str] = Field(default_factory=list)
+    next_best_action: str = "Not available"
+    qualification_verdict: str = "Analysis Unavailable"  # Interested, Evaluating, Disqualified, Not_Interested, Analysis Unavailable
 
 
 class CallSession(BaseModel):

@@ -17,8 +17,10 @@ import {
   Building2,
   UserCheck,
   Calendar,
-  Layers,
   FileText,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { CallSession, Lead, StructuredBusinessProfile } from '@/lib/types';
@@ -31,20 +33,82 @@ export default function AICallingPage() {
   const [loadingStep, setLoadingStep] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [sellerProfile, setSellerProfile] = useState<StructuredBusinessProfile | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
 
-  // Audio & Voice State
+  // Audio & Voice State (100% Browser-Native SpeechSynthesis API en-IN)
   const [isMuted, setIsMuted] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [recognitionSupported, setRecognitionSupported] = useState(false);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('Indian English (en-IN)');
+  const [speakingRate, setSpeakingRate] = useState<number>(1.08);
   const recognitionRef = useRef<any>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // Check Web Speech API Support on Client
+  // Helper to discover and attach the most natural Indian English female voice
+  const resolveIndianVoice = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return;
+
+    // Filter to find best Indian English natural voice, prioritizing female conversational tone
+    const scored = voices.map((v) => {
+      let score = 0;
+      const lang = (v.lang || '').replace('_', '-').toLowerCase();
+      const name = (v.name || '').toLowerCase();
+
+      // Check locale match: en-IN
+      const isIndianLang = lang === 'en-in' || lang.startsWith('en-in');
+      if (isIndianLang) score += 60;
+      else if (name.includes('india') || name.includes('hindi')) score += 35;
+
+      // Female conversational voice preference: Heera, Neerja, Swara, Kalpana, Veena, Lekha, etc.
+      const isFemale = [
+        'heera',
+        'neerja',
+        'swara',
+        'kalpana',
+        'veena',
+        'lekha',
+        'kavya',
+        'female',
+        'woman',
+        'girl',
+        'zira',
+      ].some((k) => name.includes(k));
+
+      if (isFemale) score += 50;
+
+      // Prefer high-fidelity Natural / Online models
+      if (name.includes('natural')) score += 30;
+      if (name.includes('online')) score += 15;
+
+      // Other Indian voices if female not directly detected (Ravi, Prabhat, etc.)
+      const isKnownIndianVoice = ['ravi', 'prabhat', 'rishi'].some((k) => name.includes(k));
+      if (isKnownIndianVoice) score += 20;
+
+      return { voice: v, score };
+    });
+
+    // Sort by highest score descending
+    scored.sort((a, b) => b.score - a.score);
+    const topMatch = scored[0]?.voice;
+
+    if (topMatch) {
+      selectedVoiceRef.current = topMatch;
+      setSelectedVoiceName(topMatch.name || 'Indian English (en-IN)');
+    }
+  };
+
+  // Check Web Speech API Support on Client & Bind Indian Accent
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if ('speechSynthesis' in window) {
         setSpeechSupported(true);
+        resolveIndianVoice();
+        window.speechSynthesis.onvoiceschanged = resolveIndianVoice;
       }
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -53,7 +117,7 @@ export default function AICallingPage() {
         const recog = new SpeechRecognition();
         recog.continuous = false;
         recog.interimResults = false;
-        recog.lang = 'en-US';
+        recog.lang = 'en-IN'; // Indian English acoustic language model
 
         recog.onresult = (event: any) => {
           const spokenText = event.results[0][0].transcript;
@@ -72,6 +136,11 @@ export default function AICallingPage() {
         recognitionRef.current = recog;
       }
     }
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
   }, []);
 
   // Load Sessions, Leads, and Profile on Mount
@@ -88,22 +157,77 @@ export default function AICallingPage() {
     });
   }, []);
 
-  // Auto-scroll transcript when turns change
+  // Auto-scroll transcript when turns change and transcript is visible
   useEffect(() => {
-    if (transcriptEndRef.current) {
+    if (showTranscript && transcriptEndRef.current) {
       transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [activeSession?.turns]);
+  }, [activeSession?.turns, showTranscript]);
 
-  // Speak AI Turn via Browser TTS
+  const TEST_VOICE_PROMPT =
+    "Hello, am I speaking with the right person? I'm calling to understand your requirements and see how we can help.";
+
+  // Test native voice playback with user test prompt
+  const handleTestVoice = () => {
+    if (isMuted) setIsMuted(false);
+    speakAITurn(TEST_VOICE_PROMPT);
+  };
+
+  // Browser-native SpeechSynthesis: natural conversational pacing, en-IN voice, rate 1.08, pitch 1.0, zero pause lag
   const speakAITurn = (text: string) => {
     if (isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    // Immediately cancel previous utterance to prevent queuing delays or long pauses
+    window.speechSynthesis.cancel();
+
+    // Ensure speech synthesis is in active running state (fixes Chromium idle pause bug)
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
+    if (!selectedVoiceRef.current) {
+      resolveIndianVoice();
+    }
+
+    // Clean text to enforce short, natural conversational pauses and professional delivery
+    const cleanText = text
+      .replace(/[*_~`#]/g, '') // remove markdown artifacts
+      .replace(/\.{2,}/g, '.') // collapse ellipses (...) to single dot to prevent long pauses
+      .replace(/[—–]/g, ', ') // replace dashes with comma for brief, natural pause
+      .replace(/;\s*/g, ', ') // replace semicolons with comma
+      .replace(/:\s*/g, ', ') // replace colons with comma
+      .replace(/\s+/g, ' ') // collapse multi-spaces and newlines into single spaces
+      .trim();
+
+    if (!cleanText) return;
+
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+
+      // Voice requirements:
+      // Speed: around 1.05–1.10 (default 1.08)
+      // Pitch: 1.0 (natural)
+      // Style: professional + conversational
+      // Pauses: short and natural
+      utterance.rate = speakingRate;
       utterance.pitch = 1.0;
-      utterance.lang = 'en-US';
+      utterance.lang = 'en-IN';
+
+      if (selectedVoiceRef.current) {
+        utterance.voice = selectedVoiceRef.current;
+      }
+
+      // Retain utterance reference to prevent Chromium garbage collection cutting off audio
+      activeUtteranceRef.current = utterance;
+      utterance.onend = () => {
+        activeUtteranceRef.current = null;
+      };
+      utterance.onerror = (e) => {
+        console.warn('Speech synthesis playback error:', e);
+        activeUtteranceRef.current = null;
+      };
+
+      // Native browser speech delivery
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.warn('Speech synthesis error:', err);
@@ -378,179 +502,91 @@ export default function AICallingPage() {
 
                 {/* Call Action Bar: Mute / End Call / Voice controls */}
                 {activeSession.status !== 'Completed' && (
-                  <div className="flex items-center justify-center gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsMuted((prev) => !prev)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
-                        isMuted
-                          ? 'bg-rose-50 border-rose-200 text-rose-700'
-                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                      }`}
-                    >
-                      {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                      <span>{isMuted ? 'Muted (Audio Off)' : 'Mute Voice'}</span>
-                    </button>
-
-                    {recognitionSupported && (
+                  <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-700">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Voice: {selectedVoiceName}</span>
+                      </div>
                       <button
                         type="button"
-                        onClick={toggleListening}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
-                          isListening
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200'
+                        onClick={handleTestVoice}
+                        title="Test with: Hello, am I speaking with the right person? I'm calling to understand your requirements and see how we can help."
+                        className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs transition-all flex items-center gap-1"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Test Voice</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSpeakingRate((prev) => {
+                            if (prev === 1.08) return 1.05;
+                            if (prev === 1.05) return 1.10;
+                            return 1.08;
+                          });
+                        }}
+                        title="Click to adjust voice speed (1.05x, 1.08x, 1.10x)"
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs"
+                      >
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{speakingRate}x Speed</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMuted((prev) => {
+                            const next = !prev;
+                            if (next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                              window.speechSynthesis.cancel();
+                            }
+                            return next;
+                          });
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                          isMuted
+                            ? 'bg-rose-50 border-rose-200 text-rose-700'
                             : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
                         }`}
                       >
-                        <Mic className="w-3.5 h-3.5" />
-                        <span>{isListening ? 'Stop Mic' : 'Speak via Mic'}</span>
+                        {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                        <span>{isMuted ? 'Muted' : 'Voice On'}</span>
                       </button>
-                    )}
 
-                    <button
-                      type="button"
-                      onClick={handleEndCall}
-                      className="px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-200 transition-all"
-                    >
-                      <PhoneOff className="w-3.5 h-3.5" />
-                      <span>End Call</span>
-                    </button>
+                      {recognitionSupported && (
+                        <button
+                          type="button"
+                          onClick={toggleListening}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                            isListening
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                          }`}
+                        >
+                          <Mic className="w-3.5 h-3.5" />
+                          <span>{isListening ? 'Listening...' : 'Speak Mic'}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleEndCall}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-200 transition-all"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5" />
+                        <span>End Call</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {/* Turn-by-Turn Conversation Quick Buttons (Demo Script Alignment) */}
+                {/* Prospect Response Input */}
                 {activeSession.status !== 'Completed' && (
-                  <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Quick Unpredictable Prospect Responses:
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        Click any response to test dynamic AI reasoning
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {/* User's exact test cases */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('What is your GST registration number?')}
-                        className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;What is your GST registration number?&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('Where is your factory located?')}
-                        className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;Where is your factory located?&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('Khambhalia')}
-                        className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;Khambhalia&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('I need cotton bandhani suits. are you selling it')}
-                        className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;I need cotton bandhani suits. are you selling it&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('Send it to jiyacrafthub@gmail.com')}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;Send it to jiyacrafthub@gmail.com&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('i want to see you products is it available on online site')}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;i want to see you products is it available on online site&rdquo;
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('What products do you offer?')}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                      >
-                        [Ask: Products]
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('What is your website?')}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                      >
-                        [Ask: Website]
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('Where is your factory located?')}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                      >
-                        [Ask: Factory Location]
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('What is your wholesale pricing and MOQ?')}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
-                      >
-                        [Ask: Pricing & MOQ]
-                      </button>
-
-                      {/* 3. Unknown question (AI must say unavailable instead of inventing) */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('What is your GST registration number?')}
-                        className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-medium transition-all"
-                      >
-                        [Test: Unknown Question]
-                      </button>
-
-                      {/* 4. New Volume & Timeline */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('We need 400 pieces delivered by next month.')}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all"
-                      >
-                        &ldquo;400 pieces by next month&rdquo;
-                      </button>
-
-                      {/* 5. Correction / Confusion handling */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse("You're not getting what I'm telling.")}
-                        className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs transition-all"
-                      >
-                        [Test: Correction / Misunderstanding]
-                      </button>
-
-                      {/* 6. Opt Out */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendResponse('I am not interested, please remove me.')}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs transition-all"
-                      >
-                        [Test: Not Interested]
-                      </button>
-                    </div>
-
-                    {/* Manual Type Box Fallback */}
-                    <div className="flex gap-2 pt-1">
+                  <div className="border-t border-slate-100 pt-4">
+                    <div className="flex gap-2">
                       <input
                         type="text"
                         placeholder="Type prospect response or speak with microphone..."
@@ -573,14 +609,14 @@ export default function AICallingPage() {
                 )}
               </div>
 
-              {/* POST-CALL SUMMARY CARD (Shown upon completion or end call) */}
+              {/* POST-CALL SUMMARY CARD (AI-Based Semantic Analysis) */}
               {activeSession.insights && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
                   {/* Summary Header */}
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
                       <div className="text-xs font-bold tracking-widest uppercase text-slate-400">
-                        CALL SUMMARY
+                        AI CALL ANALYSIS & QUALIFICATION
                       </div>
                       <h2 className="text-lg font-bold text-slate-900 mt-0.5">
                         {activeSession.company_name} — Qualification Verdict
@@ -588,8 +624,18 @@ export default function AICallingPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 text-xs font-bold uppercase tracking-wider">
-                        {activeSession.insights.qualification_verdict || 'INTERESTED'}
+                      <span
+                        className={`px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${
+                          activeSession.insights.qualification_verdict === 'Interested'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : activeSession.insights.qualification_verdict === 'Evaluating' || activeSession.insights.qualification_verdict === 'Follow_Up_Needed'
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : activeSession.insights.qualification_verdict === 'Not_Interested' || activeSession.insights.qualification_verdict === 'Disqualified'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {activeSession.insights.qualification_verdict || 'Analysis Unavailable'}
                       </span>
                     </div>
                   </div>
@@ -600,26 +646,40 @@ export default function AICallingPage() {
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
                         Intent Score
                       </span>
-                      <span className="text-lg font-bold text-indigo-700 mt-0.5 block">
-                        {activeSession.insights.intent_score || 94}/100
-                      </span>
+                      {activeSession.insights.intent_score !== null && activeSession.insights.intent_score !== undefined ? (
+                        <span
+                          className={`text-lg font-bold mt-0.5 block ${
+                            activeSession.insights.intent_score >= 80
+                              ? 'text-emerald-600'
+                              : activeSession.insights.intent_score >= 50
+                              ? 'text-indigo-600'
+                              : 'text-rose-600'
+                          }`}
+                        >
+                          {activeSession.insights.intent_score}/100
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400 mt-1 block">
+                          N/A (No LLM key)
+                        </span>
+                      )}
                     </div>
 
                     <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
-                        Need
+                        Need / Requirement
                       </span>
                       <span className="text-xs font-bold text-slate-900 mt-1 block truncate">
-                        {activeSession.insights.need || 'SharePoint Migration'}
+                        {activeSession.insights.need || 'Not available'}
                       </span>
                     </div>
 
                     <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
-                        Users / Scope
+                        Quantity / Scope
                       </span>
-                      <span className="text-xs font-bold text-slate-900 mt-1 block">
-                        {activeSession.insights.scope_users || '500 users'}
+                      <span className="text-xs font-bold text-slate-900 mt-1 block truncate">
+                        {activeSession.insights.scope_quantity || activeSession.insights.scope_users || 'Not available'}
                       </span>
                     </div>
 
@@ -627,26 +687,83 @@ export default function AICallingPage() {
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
                         Timeline
                       </span>
-                      <span className="text-xs font-bold text-slate-900 mt-1 block">
-                        {activeSession.insights.timeline || 'Within 2 months'}
+                      <span className="text-xs font-bold text-slate-900 mt-1 block truncate">
+                        {activeSession.insights.timeline || 'Not available'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Additional Qualification Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
-                      <div className="font-bold text-slate-700">Budget Status:</div>
-                      <div className="text-slate-600 font-mono">
+                  {/* Secondary Details: Product, Budget, Authority */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                      <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Product / Service:</div>
+                      <div className="text-slate-900 font-bold truncate">
+                        {activeSession.insights.product_service || 'Not available'}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                      <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Budget Status:</div>
+                      <div className="text-slate-900 font-mono font-medium">
                         {activeSession.insights.budget || 'Not disclosed'}
                       </div>
                     </div>
 
-                    <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200 space-y-1.5">
-                      <div className="font-bold text-emerald-900">Next Best Action:</div>
-                      <div className="text-emerald-800 font-semibold flex items-center gap-1.5">
-                        <ArrowRight className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{activeSession.insights.next_best_action || 'Schedule technical discussion'}</span>
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                      <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Contact Authority:</div>
+                      <div className="text-slate-900 font-medium truncate">
+                        {activeSession.insights.authority || 'Not available'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Extracted Customer Questions & Objections if present */}
+                  {((activeSession.insights.customer_questions && activeSession.insights.customer_questions.length > 0) ||
+                    (activeSession.insights.objections && activeSession.insights.objections.length > 0) ||
+                    (activeSession.insights.important_info && activeSession.insights.important_info.length > 0)) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
+                      {activeSession.insights.customer_questions && activeSession.insights.customer_questions.length > 0 && (
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                          <div className="font-bold text-slate-700">Questions Asked by Prospect:</div>
+                          <ul className="space-y-1 text-slate-600 list-disc list-inside">
+                            {activeSession.insights.customer_questions.map((q, i) => (
+                              <li key={i}>{q}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {activeSession.insights.objections && activeSession.insights.objections.length > 0 && (
+                        <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 space-y-2">
+                          <div className="font-bold text-amber-900">Objections / Concerns:</div>
+                          <ul className="space-y-1 text-amber-800 list-disc list-inside">
+                            {activeSession.insights.objections.map((obj, i) => (
+                              <li key={i}>{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {activeSession.insights.important_info && activeSession.insights.important_info.length > 0 && (
+                        <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2 md:col-span-2">
+                          <div className="font-bold text-blue-900">Important Information & Notes:</div>
+                          <ul className="space-y-1 text-blue-800 list-disc list-inside">
+                            {activeSession.insights.important_info.map((info, i) => (
+                              <li key={i}>{info}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Next Best Action */}
+                  <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 flex items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="font-bold text-emerald-900 uppercase text-[10px] tracking-wider">Next Best Action:</div>
+                      <div className="text-emerald-800 font-semibold text-sm mt-0.5 flex items-center gap-1.5">
+                        <ArrowRight className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{activeSession.insights.next_best_action || 'Not available'}</span>
                       </div>
                     </div>
                   </div>
@@ -659,50 +776,81 @@ export default function AICallingPage() {
                 </div>
               )}
 
-              {/* Complete Turn-by-Turn Conversation Transcript */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-indigo-600" />
-                    <span>Complete Conversation Transcript ({activeSession.turns.length} Turns)</span>
-                  </h3>
-                  <span className="text-xs text-slate-400 font-mono">
-                    Duration: {activeSession.duration_seconds}s
-                  </span>
-                </div>
+              {/* Turn-by-Turn Conversation Transcript (Hidden initially, shown only when user requests it) */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript((prev) => !prev)}
+                  className="w-full flex items-center justify-between p-5 hover:bg-slate-50/80 transition-all text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                        <span>Full Conversation Transcript</span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                          {activeSession.turns.length} Turns
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {showTranscript ? 'Click to collapse conversation chat history' : 'Click to view complete turn-by-turn chat history'}
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2 pt-1">
-                  {activeSession.turns.map((t, index) => {
-                    const isAI = t.speaker === 'ai';
-                    return (
-                      <div
-                        key={t.id || index}
-                        className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}
-                      >
-                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-1">
-                          {isAI && (
-                            <div className="w-4 h-4 rounded-full overflow-hidden border border-indigo-200 shrink-0">
-                              <img src="/logo.png" alt="AI" className="w-full h-full object-cover" />
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+                      Duration: {activeSession.duration_seconds}s
+                    </span>
+                    <div className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all">
+                      <span>{showTranscript ? 'Hide Chat' : 'View Chat'}</span>
+                      {showTranscript ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {showTranscript && (
+                  <div className="border-t border-slate-100 p-6 pt-4 space-y-4 bg-slate-50/30">
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 pt-1">
+                      {activeSession.turns.map((t, index) => {
+                        const isAI = t.speaker === 'ai';
+                        return (
+                          <div
+                            key={t.id || index}
+                            className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}
+                          >
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-1">
+                              {isAI && (
+                                <div className="w-4 h-4 rounded-full overflow-hidden border border-indigo-200 shrink-0">
+                                  <img src="/logo.png" alt="AI" className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <span>{isAI ? 'AI Sales Agent' : activeSession.contact_name}</span>
+                              <span>•</span>
+                              <span>+{t.timestamp_offset_seconds}s</span>
                             </div>
-                          )}
-                          <span>{isAI ? 'AI Sales Agent' : activeSession.contact_name}</span>
-                          <span>•</span>
-                          <span>+{t.timestamp_offset_seconds}s</span>
-                        </div>
-                        <div
-                          className={`p-3.5 rounded-2xl max-w-xl text-xs leading-relaxed ${
-                            isAI
-                              ? 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/80'
-                              : 'bg-indigo-600 text-white rounded-tr-none shadow-xs'
-                          }`}
-                        >
-                          {t.text}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={transcriptEndRef} />
-                </div>
+                            <div
+                              className={`p-3.5 rounded-2xl max-w-xl text-xs leading-relaxed ${
+                                isAI
+                                  ? 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200/80'
+                                  : 'bg-indigo-600 text-white rounded-tr-none shadow-xs'
+                              }`}
+                            >
+                              {t.text}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div ref={transcriptEndRef} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

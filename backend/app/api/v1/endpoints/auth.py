@@ -59,3 +59,6 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Retrieve details of the currently authenticated user."""
     return UserOut.model_validate(current_user)
+
+
+

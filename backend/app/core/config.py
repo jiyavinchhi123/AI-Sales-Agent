@@ -23,8 +23,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
 
-    # TODO: [Integration] Voice & Telephony APIs (ElevenLabs, Twilio, Vapi)
-    ELEVENLABS_API_KEY: Optional[str] = None
+    # Telephony APIs (Twilio, Vapi)
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None

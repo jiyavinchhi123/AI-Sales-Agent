@@ -216,20 +216,28 @@ export interface ObjectionBattlecard {
 
 export interface CallInsights {
   summary: string;
-  sentiment_overall: string;
-  interest_level: 'High' | 'Medium' | 'Low' | string;
-  urgency: string;
+  sentiment_overall?: string;
+  engagement?: string;
+  intent_level?: string;
+  intent_score?: number | null;
+  interest_level?: string;
+  urgency?: string;
   need?: string;
+  product_service?: string;
+  scope_quantity?: string;
   scope_users?: string;
   timeline?: string;
   budget?: string;
   authority?: string;
-  intent_score?: number;
-  next_best_action?: string;
-  budget_indicator?: string;
-  timeline_indicator?: string;
+  target_location?: string | null;
+  delivery_location?: string | null;
+  pain_points?: string[];
   extracted_pain_points?: string[];
+  objections?: string[];
   objections_handled?: string[];
+  customer_questions?: string[];
+  important_info?: string[];
+  next_best_action?: string;
   qualification_verdict: string;
 }
 
