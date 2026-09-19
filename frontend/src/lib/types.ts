@@ -392,3 +392,41 @@ export interface SendEmailResponse {
   timestamp: string;
   message: string;
 }
+
+// --- SaaS Subscription Architecture ---
+export type SubscriptionTier = 'Starter' | 'Growth' | 'Enterprise';
+
+export interface PlanTierDefinition {
+  id: SubscriptionTier;
+  name: string;
+  tagline: string;
+  price_monthly: number;
+  price_yearly: number;
+  currency: string;
+  currency_symbol: string;
+  price_inr_monthly: number;
+  price_inr_yearly: number;
+  voice_minutes: number;
+  leads_count: number;
+  seats: number;
+  is_popular: boolean;
+  badge?: string;
+  features: string[];
+}
+
+export interface SubscriptionData {
+  id: string;
+  plan_tier: SubscriptionTier;
+  status: 'active' | 'trial' | 'past_due';
+  billing_cycle: 'monthly' | 'yearly';
+  voice_minutes_used: number;
+  voice_minutes_limit: number;
+  voice_minutes_percentage: number;
+  leads_used: number;
+  leads_limit: number;
+  leads_percentage: number;
+  seats_used: number;
+  seats_limit: number;
+  available_tiers: PlanTierDefinition[];
+}
+

@@ -4,5 +4,6 @@ from app.models.business import CompanyProfile
 from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.call import CallSession
+from app.models.subscription import Subscription
 
-__all__ = ["Base", "User", "CompanyProfile", "Lead", "Opportunity", "CallSession"]
+__all__ = ["Base", "User", "CompanyProfile", "Lead", "Opportunity", "CallSession", "Subscription"]

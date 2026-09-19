@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     calling,
     opportunities,
     analytics,
+    subscription,
 )
 
 api_router = APIRouter()
@@ -18,4 +19,5 @@ api_router.include_router(leads.router, prefix="/leads", tags=["Leads, Matching 
 api_router.include_router(calling.router, prefix="/calling", tags=["AI Calling & Dialogue"])
 api_router.include_router(opportunities.router, prefix="/opportunities", tags=["Opportunities & CRM Handoff"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Dashboard & Analytics"])
+api_router.include_router(subscription.router, prefix="/subscription", tags=["SaaS & Subscriptions"])
 

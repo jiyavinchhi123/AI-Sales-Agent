@@ -12,6 +12,8 @@ import {
   IntentScore,
   EmailDraftResponse,
   SendEmailResponse,
+  SubscriptionData,
+  SubscriptionTier,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -274,5 +276,18 @@ export const api = {
     request<Opportunity>('/opportunities/crm-export', {
       method: 'POST',
       body: JSON.stringify({ opportunity_id: oppId, target_crm: targetCrm }),
+    }),
+
+  // SaaS Subscription & Quotas
+  getSubscription: (): Promise<SubscriptionData> =>
+    request<SubscriptionData>('/subscription'),
+
+  upgradeSubscription: (
+    planTier: SubscriptionTier,
+    billingCycle: 'monthly' | 'yearly' = 'monthly'
+  ): Promise<SubscriptionData> =>
+    request<SubscriptionData>('/subscription/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ plan_tier: planTier, billing_cycle: billingCycle }),
     }),
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import {
   Search,
   Bell,
@@ -12,6 +13,7 @@ import {
   PhoneCall,
   LogOut,
   Building2,
+  CreditCard,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +24,7 @@ export const Header: React.FC = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [backendStatus, setBackendStatus] = useState<'online' | 'checking'>('checking');
+  const [planTier, setPlanTier] = useState<string>('Growth');
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -30,6 +33,12 @@ export const Header: React.FC = () => {
     api.checkHealth()
       .then(() => setBackendStatus('online'))
       .catch(() => setBackendStatus('online'));
+
+    api.getSubscription()
+      .then((sub) => {
+        if (sub?.plan_tier) setPlanTier(sub.plan_tier);
+      })
+      .catch(() => {});
 
     // Dynamically sync business email & company name with active user header
     api.getStructuredBusinessProfile().then((data) => {
@@ -96,6 +105,16 @@ export const Header: React.FC = () => {
             <span>{user.company_name}</span>
           </div>
         )}
+
+        {/* Subscription Plan Badge */}
+        <Link
+          href="/subscription"
+          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200 transition-all cursor-pointer"
+          title="View SaaS Plan & Quotas"
+        >
+          <CreditCard className="w-3 h-3 text-indigo-600" />
+          <span>{planTier} Tier</span>
+        </Link>
 
         {/* Backend Status Pill */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
