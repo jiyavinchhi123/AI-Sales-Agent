@@ -14,16 +14,18 @@ import {
   CreditCard,
   Sparkles,
   ChevronRight,
+  Globe,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Business Profile', href: '/business', icon: Building2 },
   { label: 'Lead Discovery', href: '/discovery', icon: Radar },
   { label: 'Leads', href: '/leads', icon: Users },
   { label: 'AI Calling', href: '/calling', icon: PhoneCall },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
   { label: 'Subscription', href: '/subscription', icon: CreditCard },
+  { label: 'Product Landing', href: '/', icon: Globe },
 ];
 
 export const Sidebar: React.FC = () => {

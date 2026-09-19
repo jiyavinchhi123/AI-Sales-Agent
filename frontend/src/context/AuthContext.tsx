@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(data.user);
     localStorage.setItem('sales_agent_token', data.access_token);
     localStorage.setItem('sales_agent_user', JSON.stringify(data.user));
-    router.push('/');
+    router.push('/dashboard');
   };
 
   const register = async (fullName: string, email: string, password: string, companyName?: string) => {
@@ -137,12 +137,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Route protection redirect
   useEffect(() => {
     if (!isLoading) {
-      const publicPaths = ['/login', '/register'];
+      const publicPaths = ['/login', '/register', '/landing', '/'];
       const isPublic = publicPaths.includes(pathname);
       if (!user && !isPublic) {
         router.push('/login');
-      } else if (user && isPublic) {
-        router.push('/');
+      } else if (user && (pathname === '/login' || pathname === '/register')) {
+        router.push('/dashboard');
       }
     }
   }, [user, isLoading, pathname, router]);

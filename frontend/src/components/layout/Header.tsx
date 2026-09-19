@@ -14,6 +14,7 @@ import {
   LogOut,
   Building2,
   CreditCard,
+  Globe,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -116,6 +117,15 @@ export const Header: React.FC = () => {
           <span>{planTier} Tier</span>
         </Link>
 
+        {/* Product Overview Landing Page Link */}
+        <Link
+          href="/"
+          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70 border border-slate-200/80 transition-all"
+        >
+          <Globe className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Product Overview</span>
+        </Link>
+
         {/* Backend Status Pill */}
         <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -180,6 +190,14 @@ export const Header: React.FC = () => {
                 )}
               </div>
               <div className="py-1">
+                <Link
+                  href="/"
+                  onClick={() => setProfileOpen(false)}
+                  className="w-full px-4 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium transition-colors"
+                >
+                  <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Product Landing Page</span>
+                </Link>
                 <button
                   onClick={() => {
                     setProfileOpen(false);
