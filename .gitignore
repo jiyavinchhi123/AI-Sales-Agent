@@ -36,11 +36,13 @@ ENV/
 .env.production.local
 backend/.env
 
-# Logs
+# Logs & Scratch
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend/scratch/
+scratch/
 
 # OS Files
 .DS_Store

@@ -51,6 +51,7 @@ export default function AICallingPage() {
   const [speakingRate, setSpeakingRate] = useState<number>(1.08);
   const recognitionRef = useRef<any>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const liveChatContainerRef = useRef<HTMLDivElement>(null);
   const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
@@ -323,7 +324,28 @@ export default function AICallingPage() {
       );
       await fetchOpportunities();
     } catch (err) {
-      console.error('Failed to end call:', err);
+      console.warn('Handling call wrap-up on error:', err);
+      // Ensure the UI transitions safely to ended state
+      setActiveSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'Ended',
+              stage: 'ended',
+              insights: prev.insights || {
+                summary: 'The customer ended the call before the complete discussion.',
+                qualification_verdict: 'Follow_Up_Needed',
+              } as any,
+            }
+          : null
+      );
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSession.id
+            ? { ...s, status: 'Ended', stage: 'ended' }
+            : s
+        )
+      );
     }
   };
 
@@ -379,26 +401,47 @@ export default function AICallingPage() {
   // Helper to determine status category of any call session: 'in_progress', 'ended', or 'completed'
   const getCallSessionStatus = (s?: CallSession | null): 'in_progress' | 'ended' | 'completed' => {
     if (!s) return 'in_progress';
-    const summary = (s.insights?.summary || '').toLowerCase();
-    const isCustomerEnded =
-      s.status === 'Ended' ||
-      s.status === 'ended' ||
-      s.stage === 'ended' ||
-      summary.includes('ended the call') ||
-      summary.includes('ended before the complete discussion') ||
-      summary.includes('customer ended');
 
-    if (isCustomerEnded) {
+    const normalizedStatus = (s.status || '').toLowerCase();
+    const normalizedStage = (s.stage || '').toLowerCase();
+
+    // 1. Explicit in-progress calls stay in-progress
+    if (normalizedStatus === 'in_progress' && normalizedStage !== 'ended' && normalizedStage !== 'completed') {
+      return 'in_progress';
+    }
+
+    // 2. Explicit ended calls
+    if (normalizedStatus === 'ended' || normalizedStage === 'ended') {
       return 'ended';
     }
-    if (s.status === 'Completed' || s.status === 'completed' || s.stage === 'completed') {
+
+    // 3. Explicit completed calls
+    if (normalizedStatus === 'completed' || normalizedStage === 'completed') {
       return 'completed';
     }
+
+    // 4. Fallback for legacy calls without explicit status
+    const summary = (s.insights?.summary || '').toLowerCase();
+    if (
+      summary.includes('ended the call') ||
+      summary.includes('ended before the complete discussion') ||
+      summary.includes('customer ended')
+    ) {
+      return 'ended';
+    }
+
     return 'in_progress';
   };
 
   const activeStatusType = getCallSessionStatus(activeSession);
   const isCallActive = activeStatusType === 'in_progress';
+
+  // Scroll strictly inside the inner chat container only — never scroll the whole window/page down
+  useEffect(() => {
+    if (liveChatContainerRef.current) {
+      liveChatContainerRef.current.scrollTop = liveChatContainerRef.current.scrollHeight;
+    }
+  }, [activeSession?.turns?.length]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -725,6 +768,63 @@ export default function AICallingPage() {
                         </button>
                       ))}
                     </div>
+
+                    {/* LIVE CHAT CONVERSATION DIRECTLY AFTER QUICK PROMPTS DURING CALL */}
+                    {activeSession.turns && activeSession.turns.length > 0 && (
+                      <div className="border-t border-slate-100 pt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                              Live Conversation
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10.5px] font-bold border border-indigo-100">
+                              {activeSession.turns.length} Turn{activeSession.turns.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-medium text-slate-400">
+                            Updates automatically as dialogue progresses
+                          </span>
+                        </div>
+
+                        <div
+                          ref={liveChatContainerRef}
+                          className="space-y-3 max-h-[340px] overflow-y-auto pr-2 p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80"
+                        >
+                          {activeSession.turns.map((t, index) => {
+                            const isAI = t.speaker === 'ai';
+                            return (
+                              <div
+                                key={t.id || index}
+                                className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}
+                              >
+                                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-1">
+                                  {isAI && (
+                                    <div className="w-4 h-4 rounded-full overflow-hidden border border-indigo-200 shrink-0">
+                                      <img src="/logo.png" alt="AI" className="w-full h-full object-cover" />
+                                    </div>
+                                  )}
+                                  <span>{isAI ? 'AI Sales Agent' : (activeSession.contact_name || 'Prospect')}</span>
+                                  <span>•</span>
+                                  <span>+{t.timestamp_offset_seconds}s</span>
+                                </div>
+                                <div
+                                  className={`p-3 rounded-2xl max-w-lg text-xs leading-relaxed ${
+                                    isAI
+                                      ? 'bg-white text-slate-800 rounded-tl-none border border-slate-200/90 shadow-2xs'
+                                      : 'bg-indigo-600 text-white rounded-tr-none shadow-2xs'
+                                  }`}
+                                >
+                                  {t.text}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1061,44 +1161,45 @@ export default function AICallingPage() {
                 </div>
               )}
 
-              {/* Turn-by-Turn Conversation Transcript (Hidden initially, shown only when user requests it) */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => setShowTranscript((prev) => !prev)}
-                  className="w-full flex items-center justify-between p-5 hover:bg-slate-50/80 transition-all text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                      <MessageSquare className="w-4 h-4" />
+              {/* Turn-by-Turn Conversation Transcript (Shown at the LAST when call completed or ended, so user can check again) */}
+              {!isCallActive && activeSession.turns && activeSession.turns.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+                  <button
+                    type="button"
+                    onClick={() => setShowTranscript((prev) => !prev)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-slate-50/80 transition-all text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                          <span>Full Conversation Transcript</span>
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                            {activeSession.turns.length} Turns
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {showTranscript ? 'Click to collapse conversation history' : 'Click to check and review the complete turn-by-turn chat history'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                        <span>Full Conversation Transcript</span>
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                          {activeSession.turns.length} Turns
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {showTranscript ? 'Click to collapse conversation chat history' : 'Click to view complete turn-by-turn chat history'}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-                      Duration: {activeSession.duration_seconds}s
-                    </span>
-                    <div className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all">
-                      <span>{showTranscript ? 'Hide Chat' : 'View Chat'}</span>
-                      {showTranscript ? (
-                        <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                      )}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+                        Duration: {activeSession.duration_seconds}s
+                      </span>
+                      <div className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all">
+                        <span>{showTranscript ? 'Hide Chat' : 'Check Chat Again'}</span>
+                        {showTranscript ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
 
                 {showTranscript && (
                   <div className="border-t border-slate-100 p-6 pt-4 space-y-4 bg-slate-50/30">
@@ -1137,7 +1238,8 @@ export default function AICallingPage() {
                   </div>
                 )}
               </div>
-            </div>
+            )}
+          </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 text-xs shadow-xs">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50/50 border border-indigo-100 p-2 mx-auto mb-3 flex items-center justify-center shadow-xs">
