@@ -1,5 +1,4 @@
 import datetime
-import uuid
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -34,273 +33,225 @@ def _get_user_id(current_user: Optional[User], db: Session) -> str:
     return guest.id
 
 
-def _ensure_lead_opportunities(db: Session, user_id: str, leads: List[DBLead]):
-    """Ensure leads with Meeting_Booked or Interested have active DBOpportunity rows."""
-    for lead in leads:
-        if lead.status in ["Meeting_Booked", "Interested", "Opportunity", "Opportunity_Created"]:
-            existing_opp = db.query(DBOpportunity).filter(
-                DBOpportunity.user_id == user_id,
-                (DBOpportunity.lead_id == lead.id) | (DBOpportunity.company_name == lead.company_name)
-            ).first()
-            if not existing_opp:
-                deal_val = 35000.0
-                if lead.revenue_estimate and "M" in lead.revenue_estimate:
-                    deal_val = 50000.0
-                new_opp = DBOpportunity(
-                    id=f"opp-{uuid.uuid4().hex[:8]}",
-                    user_id=user_id,
-                    lead_id=lead.id,
-                    company_name=lead.company_name,
-                    deal_value=deal_val,
-                    stage="Proposal" if lead.status == "Meeting_Booked" else "Discovery",
-                    win_probability=75 if lead.status == "Meeting_Booked" else 55,
-                    assigned_rep="Autonomous Sales Agent",
-                    next_action_title=f"Conduct Executive Briefing with {lead.contact_name or 'Buyer'}",
-                    next_action_priority="High",
-                    crm_synced=False,
-                    crm_target="HubSpot",
-                    created_at=datetime.datetime.utcnow(),
-                )
-                db.add(new_opp)
-                try:
-                    db.commit()
-                except Exception:
-                    db.rollback()
-
-
 @router.get("/overview")
 def get_dashboard_overview(
     current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """Retrieve 100% dynamic dashboard metrics, 4-stage conversion funnel, buying signals, and pipeline health directly from SQLite."""
+    """
+    Simplified, 100% database-driven analytics overview.
+    Answers strictly:
+    'How many buying signals did AI find, how many became leads, how many were contacted, and how many became opportunities?'
+    Zero fake metrics, zero hardcoded scores, zero fabricated pipeline values.
+    """
     user_id = _get_user_id(current_user, db)
 
-    # Fetch company profile
+    # 1. Fetch genuine database entities
     profile = db.query(CompanyProfile).filter(CompanyProfile.user_id == user_id).first()
     monitored_profile_signals = profile.buying_signals if profile and profile.buying_signals else []
 
-    # Guarantee demo lead exists and fetch all leads
-    recent_leads = lead_service.get_leads(db, user_id=user_id)
     db_leads = db.query(DBLead).filter(DBLead.user_id == user_id).all()
-    leads_count = len(db_leads)
-
-    # Ensure opportunities exist for qualified/meeting-booked leads
-    _ensure_lead_opportunities(db, user_id, db_leads)
-
     opportunities = db.query(DBOpportunity).filter(DBOpportunity.user_id == user_id).all()
     calls_count = db.query(DBCallSession).filter(DBCallSession.user_id == user_id).count()
 
-    # 1. Conversion Funnel Calculation (Signals ➔ Leads ➔ Outreach ➔ Deals)
-    signals_count = max(leads_count, 1) + len(monitored_profile_signals)
+    # 2. Dynamic counts directly from SQLite
+    # Buying Signals = leads with detected requirements + active monitored keyword signals
+    leads_count = len(db_leads)
+    signals_count = leads_count + len(monitored_profile_signals)
 
-    outreach_leads = [
+    # Qualified Leads = total enriched leads in database
+    qualified_leads_count = leads_count
+
+    # AI Outreach = leads that have actually been contacted via email or voice call
+    contacted_leads = [
         l for l in db_leads
-        if l.status in ["Email_Sent", "Contacted", "Meeting_Booked", "Interested", "Opportunity", "Opportunity_Created"]
+        if l.status in ["Email_Sent", "Contacted", "Meeting_Booked", "Interested", "Opportunity", "Opportunity_Created", "Closed"]
     ]
-    # Outreach count encompasses both leads reached via email/contact and voice calls conducted
-    outreach_count = len(outreach_leads) + calls_count
+    ai_outreach_count = len(contacted_leads)
 
-    deals_count = len(opportunities)
-    if deals_count == 0:
-        qualified_leads = [l for l in db_leads if l.status in ["Meeting_Booked", "Interested", "Opportunity"]]
-        deals_count = len(qualified_leads)
+    # Opportunities = total active sales pipeline opportunities in database
+    opportunities_count = len(opportunities)
 
-    # Conversion percentages
-    lead_conversion_pct = round((leads_count / max(1, signals_count)) * 100) if signals_count > 0 else 0
-    outreach_conversion_pct = round((min(outreach_count, leads_count) / max(1, leads_count)) * 100) if leads_count > 0 else 0
-    deal_conversion_pct = round((deals_count / max(1, outreach_count)) * 100) if outreach_count > 0 else (100 if deals_count > 0 else 0)
+    # 3. Dynamic Conversion Rates (calculated purely from real DB data)
+    signal_to_lead_rate = round((qualified_leads_count / signals_count) * 100, 1) if signals_count > 0 else 0.0
+    lead_to_opportunity_rate = round((opportunities_count / qualified_leads_count) * 100, 1) if qualified_leads_count > 0 else 0.0
+    overall_conversion_rate = round((opportunities_count / signals_count) * 100, 1) if signals_count > 0 else 0.0
 
+    # 4. Conversion Funnel (4 core stages)
     funnel = [
         {
-            "stage": "Signals Ingested",
+            "stage": "Buying Signals",
             "label": "Signals",
             "count": signals_count,
             "percentage": 100 if signals_count > 0 else 0,
-            "dropoff_percentage": 0,
-            "description": "High-intent buyer RFPs & monitored market signals",
+            "dropoff_percentage": max(0.0, round(100.0 - signal_to_lead_rate, 1)),
+            "description": "Monitored market buying signals & buyer requirements identified by AI",
         },
         {
-            "stage": "Leads Enriched",
+            "stage": "Qualified Leads",
             "label": "Leads",
-            "count": leads_count,
-            "percentage": lead_conversion_pct,
-            "dropoff_percentage": max(0, 100 - lead_conversion_pct),
-            "description": "Target accounts enriched with verified decision-maker dossiers",
+            "count": qualified_leads_count,
+            "percentage": signal_to_lead_rate,
+            "dropoff_percentage": max(0.0, round(100.0 - (ai_outreach_count / max(1, qualified_leads_count) * 100), 1)) if qualified_leads_count > 0 else 0.0,
+            "description": "Signals matched, enriched, and qualified into actionable buyer accounts",
         },
         {
-            "stage": "AI Outreach / Called",
+            "stage": "AI Outreach",
             "label": "Outreach",
-            "count": outreach_count,
-            "percentage": outreach_conversion_pct,
-            "dropoff_percentage": max(0, 100 - outreach_conversion_pct),
-            "description": "Personalized cold emails & autonomous AI voice calls completed",
+            "count": ai_outreach_count,
+            "percentage": round((ai_outreach_count / qualified_leads_count) * 100, 1) if qualified_leads_count > 0 else 0.0,
+            "dropoff_percentage": max(0.0, round(100.0 - lead_to_opportunity_rate, 1)),
+            "description": "Leads engaged through AI personalized email or autonomous voice calls",
         },
         {
-            "stage": "CRM Opportunities",
-            "label": "Deals",
-            "count": deals_count,
-            "percentage": deal_conversion_pct,
-            "dropoff_percentage": max(0, 100 - deal_conversion_pct),
-            "description": "Active CRM opportunities, proposal reviews & meetings secured",
+            "stage": "Opportunities",
+            "label": "Opportunities",
+            "count": opportunities_count,
+            "percentage": lead_to_opportunity_rate,
+            "dropoff_percentage": 0.0,
+            "description": "High-intent buyer opportunities advancing through your sales pipeline",
         },
     ]
 
-    # 2. Dynamic Top Buying Signals Breakdown
-    top_buying_signals = []
-    # Ingest from leads
-    for idx, lead in enumerate(db_leads):
-        req_title = lead.requirement_title or f"Active demand for {lead.matched_offering or 'enterprise solutions'}"
-        sig_type = "rfp_procurement"
+    # 5. Buying Signal Breakdown (real records only)
+    buying_signals_list = []
+    for lead in db_leads:
+        req_title = lead.requirement_title or f"Active demand for {lead.matched_offering or 'offerings'}"
         req_lower = req_title.lower()
         if "procurement" in req_lower or "bulk" in req_lower or "rfp" in req_lower or "tender" in req_lower:
-            sig_type = "rfp_procurement"
-        elif "modernization" in req_lower or "cloud" in req_lower or "tech" in req_lower:
-            sig_type = "tech_stack_change"
-        elif "hiring" in req_lower or "team" in req_lower:
-            sig_type = "hiring_surge"
-        elif "expansion" in req_lower or "scale" in req_lower:
-            sig_type = "expansion"
+            category = "Procurement & RFPs"
+        elif "cloud" in req_lower or "migration" in req_lower or "tech" in req_lower or "software" in req_lower:
+            category = "Tech & Infrastructure"
+        elif "wholesale" in req_lower or "manufacturer" in req_lower or "supply" in req_lower:
+            category = "Wholesale & Supply"
+        else:
+            category = "Commercial Sourcing"
 
-        is_processed = lead.status in ["Email_Sent", "Contacted", "Meeting_Booked", "Interested", "Opportunity"]
+        created_str = lead.created_at.isoformat() if hasattr(lead.created_at, "isoformat") else str(lead.created_at)
 
-        top_buying_signals.append({
+        buying_signals_list.append({
             "id": f"sig-lead-{lead.id}",
             "company_name": lead.company_name,
-            "domain": lead.domain or "buyer-domain.com",
-            "signal_type": sig_type,
-            "title": req_title,
-            "summary": lead.requirement_description or f"Verified buying requirement for {lead.matched_offering}.",
-            "source": lead.source_platform or "B2B Intent Radar",
-            "detected_at": lead.created_at.isoformat() if hasattr(lead.created_at, "isoformat") else str(lead.created_at),
-            "confidence_score": lead.match_score or 95,
-            "urgency_level": lead.intent_level or "High",
-            "urgency_score": 95 if lead.intent_level == "High" else 80,
-            "processed": is_processed,
+            "source": lead.source_platform or "Direct Discovery",
+            "category": category,
+            "requirement": req_title,
+            "product": lead.matched_offering,
+            "intent_level": lead.intent_level if lead.intent_level else None,
+            "status": "Converted to Lead",
             "lead_id": lead.id,
+            "detected_at": created_str,
         })
 
-    # Ingest from profile monitored buying signals
     for idx, sig_text in enumerate(monitored_profile_signals):
-        sig_type = "expansion"
-        text_lower = sig_text.lower()
-        if "hir" in text_lower or "team" in text_lower:
-            sig_type = "hiring_surge"
-        elif "procurement" in text_lower or "bulk" in text_lower or "buy" in text_lower:
-            sig_type = "rfp_procurement"
-        elif "tech" in text_lower or "cloud" in text_lower or "system" in text_lower:
-            sig_type = "tech_stack_change"
-        elif "fund" in text_lower or "budget" in text_lower:
-            sig_type = "funding"
-
-        detected_time = (datetime.datetime.utcnow() - datetime.timedelta(hours=idx * 8 + 3)).isoformat()
-        target_ind = (profile.target_industries[0] if profile and profile.target_industries else "Target Industry")
-
-        top_buying_signals.append({
+        buying_signals_list.append({
             "id": f"sig-profile-{idx}",
-            "company_name": f"{target_ind} Buyer Network",
-            "domain": "verified-buyer.org",
-            "signal_type": sig_type,
-            "title": sig_text,
-            "summary": f"Monitored intent pattern: {sig_text} aligned with {profile.company_name if profile else 'your company'}.",
-            "source": "Autonomous Radar Scanner",
-            "detected_at": detected_time,
-            "confidence_score": max(86, 96 - idx * 3),
-            "urgency_level": "High" if idx < 2 else "Medium",
-            "urgency_score": max(80, 92 - idx * 4),
-            "processed": False,
+            "company_name": profile.company_name if profile else "Active Market Profile",
+            "source": "Monitored Business Profile",
+            "category": "Monitored Intent Keyword",
+            "requirement": sig_text,
+            "product": None,
+            "intent_level": None,
+            "status": "Active Monitor",
             "lead_id": None,
+            "detected_at": None,
         })
 
-    # 3. Pipeline Health & Stage Breakdown
-    total_pipeline_val = sum(opp.deal_value for opp in opportunities)
-    pipeline_display = f"${int(total_pipeline_val):,}" if total_pipeline_val > 0 else "$0"
+    # 6. Opportunity Summary (real records & genuine pipeline value only)
+    real_deal_values = [o.deal_value for o in opportunities if o.deal_value is not None and o.deal_value > 0]
+    has_real_deal_values = len(real_deal_values) > 0
+    total_pipeline_val = sum(real_deal_values) if has_real_deal_values else None
+    uses_inr = any("₹" in (o.deal_value_estimate or "") for o in opportunities)
+    currency_prefix = "₹" if uses_inr else "$"
+    formatted_pipeline_val = f"{currency_prefix}{int(total_pipeline_val):,}" if total_pipeline_val is not None else "Not available"
 
-    stages = ["Discovery", "Qualified", "Proposal", "Negotiation", "Won"]
-    stage_breakdown = []
-    for st in stages:
-        st_opps = [o for o in opportunities if o.stage.lower() == st.lower()]
-        st_val = sum(o.deal_value for o in st_opps)
-        avg_prob = round(sum(o.win_probability for o in st_opps) / len(st_opps)) if st_opps else 0
-        stage_breakdown.append({
-            "stage": st,
-            "count": len(st_opps),
-            "value": st_val,
-            "formatted_value": f"${int(st_val):,}" if st_val > 0 else "$0",
-            "avg_win_rate": avg_prob if avg_prob > 0 else (40 if st == "Discovery" else 65 if st == "Proposal" else 85 if st == "Won" else 50),
-        })
+    stage_counts: Dict[str, int] = {}
+    for o in opportunities:
+        st = o.stage if (o.stage and o.stage.lower() != "not available") else "Not available"
+        stage_counts[st] = stage_counts.get(st, 0) + 1
 
-    # Health score computation
-    health_score = min(96, max(35, 40 + deals_count * 18 + len(outreach_leads) * 12))
-    if health_score >= 80:
-        health_label = "Strong Velocity"
-    elif health_score >= 60:
-        health_label = "Steady Momentum"
-    else:
-        health_label = "Building Pipeline"
-
-    # Category breakdown for signals
-    cat_counts: Dict[str, int] = {}
-    for s in top_buying_signals:
-        stype = s.get("signal_type", "rfp_procurement")
-        cat_counts[stype] = cat_counts.get(stype, 0) + 1
-
-    category_labels = {
-        "rfp_procurement": "Procurement & RFPs",
-        "tech_stack_change": "Tech Modernization",
-        "hiring_surge": "Hiring & Expansion",
-        "expansion": "Market Expansion",
-        "funding": "Budget & Funding",
-    }
-    signals_by_category = [
-        {
-            "category": category_labels.get(k, k.replace("_", " ").title()),
-            "count": v,
-            "percentage": round((v / max(1, len(top_buying_signals))) * 100),
-        }
-        for k, v in cat_counts.items()
+    stage_breakdown = [
+        {"stage": st, "count": count}
+        for st, count in stage_counts.items()
     ]
 
-    pipeline_health = {
-        "health_score": health_score,
-        "health_label": health_label,
-        "total_pipeline_value": pipeline_display,
-        "active_deals_count": deals_count,
-        "stage_breakdown": stage_breakdown,
-        "signals_by_category": signals_by_category,
-        "average_cycle_days": 6.4,
-    }
+    opportunity_records = []
+    for o in opportunities:
+        val = o.deal_value if (o.deal_value is not None and o.deal_value > 0) else None
+        if o.deal_value_estimate and o.deal_value_estimate != "Not available":
+            formatted_val = o.deal_value_estimate
+        elif val is not None:
+            formatted_val = f"{currency_prefix}{int(val):,}"
+        else:
+            formatted_val = "Not available"
+        stage_val = o.stage if (o.stage and o.stage.lower() != "not available") else "Not available"
+        action_val = o.next_action_title if (o.next_action_title and o.next_action_title.lower() != "not available") else "Not available"
+        priority_val = o.next_action_priority if (o.next_action_priority and o.next_action_priority.lower() != "not available") else "Not available"
+        created_str = o.created_at.isoformat() if hasattr(o.created_at, "isoformat") else str(o.created_at)
+
+        opportunity_records.append({
+            "id": o.id,
+            "company_name": o.company_name,
+            "stage": stage_val,
+            "deal_value": val,
+            "formatted_deal_value": formatted_val,
+            "assigned_rep": o.assigned_rep or "Not assigned",
+            "next_action_title": action_val,
+            "next_action_priority": priority_val,
+            "crm_synced": o.crm_synced,
+            "crm_target": o.crm_target,
+            "created_at": created_str,
+        })
 
     high_intent_count = len([l for l in db_leads if l.intent_level == "High"])
-    high_priority_leads = [l for l in recent_leads if l.intent and l.intent.grade in ["A", "B"]][:5]
 
     return {
+        "conversion_rates": {
+            "signal_to_lead": signal_to_lead_rate,
+            "lead_to_opportunity": lead_to_opportunity_rate,
+            "overall_conversion": overall_conversion_rate,
+            "counts": {
+                "signals": signals_count,
+                "leads": qualified_leads_count,
+                "outreach": ai_outreach_count,
+                "opportunities": opportunities_count,
+            },
+        },
+        "funnel": funnel,
+        "buying_signals_summary": {
+            "total_active_signals": len(buying_signals_list),
+            "signals": buying_signals_list,
+        },
+        "opportunity_summary": {
+            "total_count": opportunities_count,
+            "has_real_values": has_real_deal_values,
+            "pipeline_value": total_pipeline_val,
+            "formatted_pipeline_value": formatted_pipeline_val if has_real_deal_values else "Not available",
+            "stage_breakdown": stage_breakdown,
+            "opportunities": opportunity_records,
+        },
+        # Backwards compatibility fields for DashboardPage on /
         "kpis": {
             "active_buying_signals": signals_count,
             "high_urgency_signals": high_intent_count,
             "total_leads": leads_count,
             "grade_a_leads": high_intent_count,
             "ai_calls_conducted": calls_count,
-            "meetings_secured": len([o for o in opportunities if o.stage in ["Proposal", "Won"]]),
-            "qualified_opportunities": deals_count,
-            "pipeline_value_estimate": pipeline_display,
-            "average_response_rate": "0%" if leads_count == 0 else f"{min(85, 20 + len(outreach_leads) * 25)}%",
-            "ai_qualification_rate": "0%" if leads_count == 0 else f"{min(95, 30 + deals_count * 30)}%",
+            "meetings_secured": len([l for l in db_leads if l.status == "Meeting_Booked"]),
+            "qualified_opportunities": opportunities_count,
+            "pipeline_value_estimate": formatted_pipeline_val if has_real_deal_values else "Not available",
+            "average_response_rate": f"{round((ai_outreach_count / max(1, leads_count)) * 100)}%" if leads_count > 0 else "0%",
+            "ai_qualification_rate": f"{round((opportunities_count / max(1, leads_count)) * 100)}%" if leads_count > 0 else "0%",
         },
-        "funnel": funnel,
-        "top_buying_signals": top_buying_signals,
-        "pipeline_health": pipeline_health,
-        "high_priority_leads": high_priority_leads,
-        "recent_opportunities": [
+        "top_buying_signals": [
             {
-                "id": o.id,
-                "company_name": o.company_name,
-                "deal_value": f"${int(o.deal_value):,}",
-                "stage": o.stage,
-                "probability": f"{o.win_probability}%",
-                "assigned_rep": o.assigned_rep or "Autonomous Agent",
+                "id": s["id"],
+                "company_name": s["company_name"],
+                "title": s["requirement"],
+                "source": s["source"],
+                "urgency_level": s["intent_level"] or "Normal",
+                "lead_id": s["lead_id"],
             }
-            for o in opportunities[:4]
+            for s in buying_signals_list
         ],
+        "recent_opportunities": opportunity_records,
     }
-

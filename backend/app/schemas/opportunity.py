@@ -21,10 +21,11 @@ class Opportunity(BaseModel):
     contact_name: str
     contact_email: str
     matched_offering: str
-    deal_value_estimate: str
-    stage: str  # Discovery, Qualified_Lead, Technical_Evaluation, Proposal_Sent, Closed_Won
-    win_probability: int = Field(..., ge=0, le=100)
-    assigned_rep: str
+    deal_value: Optional[float] = None
+    deal_value_estimate: Optional[str] = "Not available"
+    stage: Optional[str] = "Not available"
+    win_probability: Optional[int] = None
+    assigned_rep: Optional[str] = "Not assigned"
     next_action: Optional[NextBestAction] = None
     crm_synced: bool = False
     crm_target: Optional[str] = None  # "HubSpot", "Salesforce", "Webhook"

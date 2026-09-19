@@ -1,73 +1,60 @@
-"""Lead-to-Product Semantic Matching Service"""
+"""
+Lead-to-Product Dynamic Matching Service
+Calculates semantic alignment between lead requirements/signals and active business profile offerings.
+Zero hardcoded company or product templates.
+"""
 
-from typing import List
-from app.schemas.business import ProductOffering
+from typing import List, Optional
+from app.schemas.business import ProductOffering, StructuredBusinessProfile
 from app.schemas.lead import Lead, OfferingMatch
-from app.services.business_service import business_service
 
 
 class MatchingService:
-    def match_lead_to_offerings(self, lead: Lead, products: List[ProductOffering]) -> OfferingMatch:
+    def match_lead_to_offerings(
+        self,
+        lead: Lead,
+        products: Optional[List[ProductOffering]] = None,
+        seller_profile: Optional[StructuredBusinessProfile] = None
+    ) -> OfferingMatch:
         """
-        Calculates semantic alignment between lead signals, tech stack, industry,
-        and product offerings. Returns the highest-scoring product match.
+        Calculates semantic alignment between lead signals, industry, and seller offerings.
+        Returns the highest-scoring offering match dynamically.
         """
-        best_product = products[0] if products else None
-        highest_score = 70
-        matched_features = []
-        reasoning = ""
-        suggested_pitch = ""
+        # Collect candidate offerings
+        offerings_list = []
+        if products:
+            offerings_list.extend([p.name for p in products if p.name])
+        if seller_profile and seller_profile.products_services:
+            offerings_list.extend([p for p in seller_profile.products_services if p])
 
-        lead_text = f"{lead.industry} {' '.join(lead.signals_summary)} {' '.join(lead.tech_stack)}".lower()
+        if not offerings_list:
+            offerings_list = [lead.matched_offering or "Commercial Sourcing"]
 
-        # Rule & Semantic Evaluation
-        for product in products:
-            score = 65
-            features = []
+        lead_signals_text = " ".join(lead.signals_summary or []).lower()
+        lead_full_text = f"{lead.company_name} {lead.industry} {lead_signals_text} {lead.matched_offering or ''}".lower()
 
-            # Match signals
-            if "compliance" in lead_text or "soc 2" in lead_text or "iso" in lead_text or "audit" in lead_text:
-                if product.id == "prod-auditbot":
-                    score += 28
-                    features.extend(["Automated SOC 2 & ISO 27001 evidence", "Auditor portal sync"])
-            
-            if "iam" in lead_text or "permission" in lead_text or "identity" in lead_text or "zero-trust" in lead_text:
-                if product.id == "prod-ciem":
-                    score += 27
-                    features.extend(["Least-privilege role right-sizing", "Toxic permission combination mapping"])
-            
-            if "aws" in lead_text or "cloud" in lead_text or "kubernetes" in lead_text or "drift" in lead_text:
-                if product.id == "prod-cspm":
-                    score += 24
-                    features.extend(["Agentless multi-cloud posture", "Automated Terraform PR remediation"])
+        best_offering = offerings_list[0]
+        highest_score = 75
 
+        # Check for token or substring overlaps
+        for off in offerings_list:
+            off_tokens = set(off.lower().split())
+            overlap = sum(1 for t in off_tokens if len(t) > 3 and t in lead_full_text)
+            score = 70 + (overlap * 10)
             if score > highest_score:
                 highest_score = min(score, 98)
-                best_product = product
-                matched_features = features or product.key_features[:2]
+                best_offering = off
 
-        if best_product:
-            reasoning = f"Matched {lead.company_name} with {best_product.name} based on active compliance & infrastructure signals."
-            suggested_pitch = f"Accelerate {lead.company_name}'s security posture with automated {best_product.category}."
-            match_tier = "Strong" if highest_score >= 85 else "Moderate"
-            return OfferingMatch(
-                product_id=best_product.id,
-                product_name=best_product.name,
-                fit_score=highest_score,
-                match_tier=match_tier,
-                reasoning=reasoning,
-                aligned_features=matched_features,
-                suggested_pitch=suggested_pitch
-            )
-        
+        match_tier = "Strong" if highest_score >= 85 else "Moderate"
+
         return OfferingMatch(
-            product_id="prod-cspm",
-            product_name="CloudArmor Posture Guard",
-            fit_score=75,
-            match_tier="Moderate",
-            reasoning="General cloud security posture alignment.",
-            aligned_features=["Agentless inventory", "Misconfiguration alerts"],
-            suggested_pitch="Streamline cloud security reviews for engineering teams."
+            product_id="prod-matched",
+            product_name=best_offering,
+            fit_score=highest_score,
+            match_tier=match_tier,
+            reasoning=f"Matched {lead.company_name}'s stated requirements with verified offering: {best_offering}.",
+            aligned_features=[best_offering],
+            suggested_pitch=f"Supply high-grade {best_offering} with verified capacity tailored to {lead.company_name}."
         )
 
 

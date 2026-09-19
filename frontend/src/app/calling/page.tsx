@@ -21,9 +21,12 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
+  Briefcase,
+  Database,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { CallSession, Lead, StructuredBusinessProfile } from '@/lib/types';
+import { CallSession, Lead, StructuredBusinessProfile, Opportunity } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 
 export default function AICallingPage() {
@@ -34,6 +37,10 @@ export default function AICallingPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [sellerProfile, setSellerProfile] = useState<StructuredBusinessProfile | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [creatingOpp, setCreatingOpp] = useState(false);
+  const [syncingCRM, setSyncingCRM] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // Audio & Voice State (100% Browser-Native SpeechSynthesis API en-IN)
   const [isMuted, setIsMuted] = useState(false);
@@ -143,7 +150,16 @@ export default function AICallingPage() {
     };
   }, []);
 
-  // Load Sessions, Leads, and Profile on Mount
+  const fetchOpportunities = async () => {
+    try {
+      const opps = await api.getOpportunities();
+      setOpportunities(opps);
+    } catch (err) {
+      console.error('Failed to load opportunities:', err);
+    }
+  };
+
+  // Load Sessions, Leads, Opportunities, and Profile on Mount
   useEffect(() => {
     api.getCallSessions().then((data) => {
       setSessions(data);
@@ -155,6 +171,7 @@ export default function AICallingPage() {
     api.getStructuredBusinessProfile().then((profile) => {
       setSellerProfile(profile);
     });
+    fetchOpportunities();
   }, []);
 
   // Auto-scroll transcript when turns change and transcript is visible
@@ -304,10 +321,52 @@ export default function AICallingPage() {
       setSessions((prev) =>
         prev.map((s) => (s.id === finalized.id ? finalized : s))
       );
+      await fetchOpportunities();
     } catch (err) {
       console.error('Failed to end call:', err);
     }
   };
+
+  // 1-Click Promote Call to Opportunity in SQLite
+  const handleCreateOpportunity = async () => {
+    if (!activeSession) return;
+    setCreatingOpp(true);
+    setActionMessage(null);
+    try {
+      const newOpp = await api.createOpportunityFromCall(activeSession.id);
+      await fetchOpportunities();
+      setActionMessage(`✓ Opportunity created for ${newOpp.company_name} in SQLite!`);
+      setTimeout(() => setActionMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to create opportunity:', err);
+      setActionMessage(`Error creating opportunity: ${err.message || 'Failed'}`);
+    } finally {
+      setCreatingOpp(false);
+    }
+  };
+
+  // 1-Click Push to CRM
+  const handleExportCRM = async (oppId: string) => {
+    setSyncingCRM(true);
+    setActionMessage(null);
+    try {
+      await api.exportToCRM(oppId, 'HubSpot');
+      await fetchOpportunities();
+      setActionMessage('✓ Successfully synced opportunity with HubSpot CRM!');
+      setTimeout(() => setActionMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to sync CRM:', err);
+      setActionMessage(`CRM sync error: ${err.message || 'Failed'}`);
+    } finally {
+      setSyncingCRM(false);
+    }
+  };
+
+  const activeOpportunity = opportunities.find(
+    (o) =>
+      (activeSession?.lead_id && o.lead_id === activeSession.lead_id) ||
+      (activeSession?.company_name && o.company_name.toLowerCase() === activeSession.company_name.toLowerCase())
+  );
 
   // Dynamic quick responses tailored to qualification dialogue
   const currentStage = activeSession?.stage || 'greeting';
@@ -316,6 +375,30 @@ export default function AICallingPage() {
       ?.slice()
       ?.reverse()
       ?.find((t) => t.speaker === 'ai') || null;
+
+  // Helper to determine status category of any call session: 'in_progress', 'ended', or 'completed'
+  const getCallSessionStatus = (s?: CallSession | null): 'in_progress' | 'ended' | 'completed' => {
+    if (!s) return 'in_progress';
+    const summary = (s.insights?.summary || '').toLowerCase();
+    const isCustomerEnded =
+      s.status === 'Ended' ||
+      s.status === 'ended' ||
+      s.stage === 'ended' ||
+      summary.includes('ended the call') ||
+      summary.includes('ended before the complete discussion') ||
+      summary.includes('customer ended');
+
+    if (isCustomerEnded) {
+      return 'ended';
+    }
+    if (s.status === 'Completed' || s.status === 'completed' || s.stage === 'completed') {
+      return 'completed';
+    }
+    return 'in_progress';
+  };
+
+  const activeStatusType = getCallSessionStatus(activeSession);
+  const isCallActive = activeStatusType === 'in_progress';
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -397,7 +480,7 @@ export default function AICallingPage() {
               ) : (
                 sessions.map((s) => {
                   const isSelected = activeSession?.id === s.id;
-                  const isFinished = s.status === 'Completed';
+                  const statusType = getCallSessionStatus(s);
 
                   return (
                     <div
@@ -411,15 +494,19 @@ export default function AICallingPage() {
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900 truncate">{s.company_name}</span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isFinished
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
-                          }`}
-                        >
-                          {isFinished ? 'Completed' : '● Live Call'}
-                        </span>
+                        {statusType === 'in_progress' ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                            ● Live Call
+                          </span>
+                        ) : statusType === 'ended' ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 font-semibold">
+                            Ended
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Completed
+                          </span>
+                        )}
                       </div>
                       <div className="text-slate-500 text-[11px] mt-1">
                         Contact: {s.contact_name} ({s.contact_title})
@@ -455,13 +542,18 @@ export default function AICallingPage() {
                   </div>
 
                   {/* Connected Status Indicator */}
-                  {activeSession.status !== 'Completed' ? (
+                  {activeStatusType === 'in_progress' ? (
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 text-xs font-bold">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span>● CALL CONNECTED</span>
                     </div>
+                  ) : activeStatusType === 'ended' ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-300 text-xs font-bold">
+                      <PhoneOff className="w-3.5 h-3.5 text-slate-500" />
+                      <span>CALL ENDED</span>
+                    </div>
                   ) : (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-bold">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 text-xs font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       <span>CALL COMPLETED</span>
                     </div>
@@ -473,7 +565,7 @@ export default function AICallingPage() {
                   <div className="flex justify-center">
                     <div className="relative w-16 h-16 rounded-2xl p-1 bg-white shadow-md border border-indigo-100 flex items-center justify-center">
                       <img src="/logo.png" alt="AI Agent Voice" className="w-full h-full object-cover rounded-xl" />
-                      {activeSession.status !== 'Completed' && (
+                      {isCallActive && (
                         <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
@@ -482,14 +574,14 @@ export default function AICallingPage() {
                     </div>
                   </div>
                   <div className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                    AI Sales Agent Speaking
+                    {isCallActive ? 'AI Sales Agent Speaking' : activeStatusType === 'ended' ? 'Call Ended' : 'Call Completed'}
                   </div>
                   <div className="text-base sm:text-lg font-medium text-slate-800 leading-relaxed max-w-2xl mx-auto">
-                    &ldquo;{lastAITurn?.text || 'Connecting call...'}&rdquo;
+                    &ldquo;{lastAITurn?.text || (activeStatusType === 'ended' ? 'Call ended.' : 'Connecting call...')}&rdquo;
                   </div>
 
                   {/* Listening Indicator */}
-                  {activeSession.status !== 'Completed' && (
+                  {isCallActive && (
                     <div className="pt-2 flex items-center justify-center gap-2 text-xs font-semibold text-indigo-600">
                       <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -501,7 +593,7 @@ export default function AICallingPage() {
                 </div>
 
                 {/* Call Action Bar: Mute / End Call / Voice controls */}
-                {activeSession.status !== 'Completed' && (
+                {isCallActive && (
                   <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-700">
@@ -584,8 +676,8 @@ export default function AICallingPage() {
                 )}
 
                 {/* Prospect Response Input */}
-                {activeSession.status !== 'Completed' && (
-                  <div className="border-t border-slate-100 pt-4">
+                {isCallActive && (
+                  <div className="border-t border-slate-100 pt-4 space-y-3">
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -604,6 +696,34 @@ export default function AICallingPage() {
                         <Send className="w-3.5 h-3.5" />
                         <span>{loadingStep ? 'Responding...' : 'Send'}</span>
                       </button>
+                    </div>
+
+                    {/* Quick Qualification Response Chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Quick Prompts:</span>
+                      {[
+                        "We need 500 pieces of Modal Silk Sarees",
+                        "Delivery by next month",
+                        "Our target price is ₹750 per piece",
+                        "I am the store owner and buyer",
+                        "Send catalog to info@boutique.com",
+                        "Where is your factory located?",
+                        "Sorry, I have to go now, bye",
+                      ].map((promptText, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          onClick={() => handleSendResponse(promptText)}
+                          disabled={loadingStep}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                            promptText.includes("bye")
+                              ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200"
+                          }`}
+                        >
+                          {promptText}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -693,8 +813,8 @@ export default function AICallingPage() {
                     </div>
                   </div>
 
-                  {/* Secondary Details: Product, Budget, Authority */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  {/* Secondary Details: Product, Budget, Deal Amount, Authority */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
                       <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Product / Service:</div>
                       <div className="text-slate-900 font-bold truncate">
@@ -704,8 +824,15 @@ export default function AICallingPage() {
 
                     <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
                       <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Budget Status:</div>
-                      <div className="text-slate-900 font-mono font-medium">
+                      <div className="text-slate-900 font-mono font-medium truncate">
                         {activeSession.insights.budget || 'Not disclosed'}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                      <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider">Deal Amount:</div>
+                      <div className="text-slate-900 font-mono font-medium truncate">
+                        {activeSession.insights.deal_amount || 'Not available'}
                       </div>
                     </div>
 
@@ -769,9 +896,167 @@ export default function AICallingPage() {
                   </div>
 
                   {/* AI Call Overview Note */}
-                  <div className="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200/80 leading-relaxed">
-                    <strong className="text-slate-800">AI Call Summary: </strong>
-                    {activeSession.insights.summary}
+                  <div
+                    className={`text-xs p-4 rounded-xl border leading-relaxed ${
+                      activeSession.insights.summary?.toLowerCase().includes('customer ended the call before the complete discussion')
+                        ? 'bg-amber-50/80 border-amber-300/80 text-amber-950'
+                        : 'bg-slate-50 border-slate-200/80 text-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold mb-1">
+                      {activeSession.insights.summary?.toLowerCase().includes('customer ended the call before the complete discussion') && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-0.5"></span>
+                      )}
+                      <span className={activeSession.insights.summary?.toLowerCase().includes('customer ended the call before the complete discussion') ? 'text-amber-900' : 'text-slate-800'}>
+                        AI Call Summary:
+                      </span>
+                    </div>
+                    <span>{activeSession.insights.summary}</span>
+                  </div>
+
+                  {/* ACTION STATUS TOAST */}
+                  {actionMessage && (
+                    <div className="p-3.5 rounded-xl border bg-emerald-50 border-emerald-300 text-emerald-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{actionMessage}</span>
+                      </div>
+                      <button
+                        onClick={() => setActionMessage(null)}
+                        className="text-emerald-700 hover:text-emerald-900 font-bold ml-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* CRM OPPORTUNITY STATUS & ACTION CARD */}
+                  <div className="border-t border-slate-100 pt-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                          <Database className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                            SQLite CRM Pipeline & Opportunity
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            {activeOpportunity
+                              ? 'Active opportunity record confirmed in database'
+                              : 'Qualified call ready for promotion into sales pipeline'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {activeOpportunity ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Opportunity Created
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                          Not in Pipeline
+                        </span>
+                      )}
+                    </div>
+
+                    {activeOpportunity ? (
+                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Deal Value</span>
+                            <span className="font-bold text-slate-900 font-mono text-sm mt-0.5 block">
+                              {activeOpportunity.deal_value_estimate ||
+                                (activeOpportunity.deal_value
+                                  ? `₹${activeOpportunity.deal_value.toLocaleString()}`
+                                  : 'Not available')}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Stage</span>
+                            <span className="font-bold text-indigo-700 text-xs mt-0.5 block">
+                              {activeOpportunity.stage}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Assigned Rep</span>
+                            <span className="font-medium text-slate-800 text-xs mt-0.5 block truncate">
+                              {activeOpportunity.assigned_rep || 'Account Executive'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">CRM Handoff</span>
+                            <span className="text-xs font-semibold mt-0.5 block">
+                              {activeOpportunity.crm_synced ? (
+                                <span className="text-emerald-700 font-bold">
+                                  ✓ Synced ({activeOpportunity.crm_target || 'HubSpot'})
+                                </span>
+                              ) : (
+                                <span className="text-amber-700 font-medium">Pending Sync</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {activeOpportunity.next_action && (
+                          <div className="text-xs pt-1 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                            <span className="text-slate-500">
+                              Next: <strong className="text-slate-800">{activeOpportunity.next_action.title}</strong>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-200/60 flex-wrap">
+                          <div className="text-[11px] text-slate-500 font-mono">
+                            Record ID: {activeOpportunity.id}{' '}
+                            {activeOpportunity.crm_record_id && `• CRM: #${activeOpportunity.crm_record_id}`}
+                          </div>
+
+                          {!activeOpportunity.crm_synced ? (
+                            <button
+                              type="button"
+                              onClick={() => handleExportCRM(activeOpportunity.id)}
+                              disabled={syncingCRM}
+                              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>{syncingCRM ? 'Syncing to HubSpot...' : 'Push to HubSpot CRM'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/60 border border-emerald-300 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Synced with {activeOpportunity.crm_target}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 flex items-center justify-between gap-4 flex-wrap">
+                        <div className="text-xs text-slate-600 max-w-md">
+                          {activeSession.insights.qualification_verdict === 'Interested' ? (
+                            <span>
+                              The prospect indicated buying interest and requirements. Click below to register an
+                              official Opportunity record in SQLite.
+                            </span>
+                          ) : (
+                            <span>
+                              Promote this prospect directly to a qualified Opportunity in SQLite for CRM tracking.
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCreateOpportunity}
+                          disabled={creatingOpp}
+                          className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Briefcase className="w-3.5 h-3.5" />
+                          <span>{creatingOpp ? 'Creating Opportunity...' : 'Create CRM Opportunity'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

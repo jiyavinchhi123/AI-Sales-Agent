@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Building2,
   CheckCircle2,
+  Briefcase,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Lead, EmailDraftResponse, StructuredBusinessProfile } from '@/lib/types';
@@ -41,6 +42,8 @@ export default function LeadsPage() {
   const [emailSentSuccess, setEmailSentSuccess] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; real_sent?: boolean; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [convertingOpp, setConvertingOpp] = useState(false);
+  const [convertSuccessMsg, setConvertSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLeads();
@@ -147,6 +150,26 @@ export default function LeadsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+
+  // Convert Qualified Lead to Opportunity in SQLite
+  const handleConvertLeadToOpportunity = async () => {
+    if (!selectedLead) return;
+    setConvertingOpp(true);
+    setConvertSuccessMsg(null);
+    try {
+      const opp = await api.createOpportunityFromLead(selectedLead.id);
+      const updated = { ...selectedLead, status: 'Opportunity_Created' };
+      setSelectedLead(updated);
+      setLeads((prev) => prev.map((l) => (l.id === selectedLead.id ? updated : l)));
+      setConvertSuccessMsg(`✓ Opportunity registered for ${opp.company_name} in SQLite!`);
+      setTimeout(() => setConvertSuccessMsg(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to convert opportunity:', err);
+      setConvertSuccessMsg(`Error: ${err.message || 'Conversion failed'}`);
+    } finally {
+      setConvertingOpp(false);
+    }
+  };
 
   // Export Leads to CSV
   const handleExportCSV = () => {
@@ -403,6 +426,35 @@ export default function LeadsPage() {
                     <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-lg flex items-center gap-2 text-xs text-sky-800">
                       <CheckCircle2 className="w-4 h-4 text-sky-600 flex-shrink-0" />
                       <span>Cold outreach email dispatched and logged in CRM history.</span>
+                    </div>
+                  )}
+
+                  {selectedLead.status === 'Opportunity_Created' ? (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between gap-2 text-xs text-emerald-800">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="font-semibold">Active Opportunity in SQLite CRM</span>
+                      </div>
+                      <Link href="/calling" className="text-[11px] font-bold text-emerald-700 hover:underline">
+                        View Pipeline →
+                      </Link>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConvertLeadToOpportunity}
+                      disabled={convertingOpp}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-all disabled:opacity-50"
+                    >
+                      <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{convertingOpp ? 'Creating Opportunity...' : 'Convert to SQLite Opportunity'}</span>
+                    </button>
+                  )}
+
+                  {convertSuccessMsg && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{convertSuccessMsg}</span>
                     </div>
                   )}
                 </div>

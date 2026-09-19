@@ -10,7 +10,6 @@ import {
   Radar,
   Users,
   PhoneCall,
-  Send,
   BarChart3,
   Sparkles,
   ChevronRight,
@@ -22,7 +21,6 @@ const NAV_ITEMS = [
   { label: 'Lead Discovery', href: '/discovery', icon: Radar },
   { label: 'Leads', href: '/leads', icon: Users },
   { label: 'AI Calling', href: '/calling', icon: PhoneCall },
-  { label: 'Campaigns', href: '/campaigns', icon: Send },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
 ];
 

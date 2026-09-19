@@ -10,7 +10,6 @@ from app.schemas.business import BusinessProfile, ProductOffering, TargetPersona
 from app.schemas.signal import BuyingSignal
 from app.schemas.lead import Lead, LeadContact, OfferingMatch, IntentScore
 from app.schemas.call import CallSession, CallTurn, CallInsights, ObjectionBattlecard
-from app.schemas.campaign import Campaign
 from app.schemas.opportunity import Opportunity, NextBestAction
 
 
@@ -382,7 +381,7 @@ def get_default_leads() -> List[Lead]:
             status="Outreach_Ready",
             created_at="2026-03-04T10:00:00Z",
             updated_at="2026-03-07T14:15:00Z",
-            notes="Queued for AI Calling Agent campaign: Q1 Healthcare Expansion."
+            notes="Queued for automated AI outreach."
         ),
         Lead(
             id="lead-003",
@@ -513,7 +512,6 @@ def get_default_call_sessions() -> List[CallSession]:
             company_name="FinTrack Analytics",
             contact_name="Marcus Vance",
             contact_title="VP of Engineering & Acting Head of Security",
-            campaign_id="camp-001",
             status="Completed",
             duration_seconds=214,
             started_at="2026-03-07T15:30:00Z",
@@ -613,104 +611,6 @@ def get_default_call_sessions() -> List[CallSession]:
     ]
 
 
-def get_default_campaigns() -> List[Campaign]:
-    return [
-        Campaign(
-            id="camp-001",
-            name="Q1 Scaleup Compliance & Audit Acceleration",
-            description="Outreach targeting recently funded Series A/B SaaS companies preparing for enterprise audits.",
-            target_criteria="Series A/B funding within 60 days, hiring DevOps/Security, 50-300 employees",
-            status="Active",
-            channels=["AI Voice Call", "Personalized Email"],
-            total_leads=18,
-            contacted_count=14,
-            interested_count=6,
-            scheduled_meetings=4,
-            response_rate=42.8,
-            created_at="2026-03-01T09:00:00Z"
-        ),
-        Campaign(
-            id="camp-002",
-            name="Healthcare & MedTech ISO/HIPAA Expansion",
-            description="Targeting European and US digital health providers undergoing cross-border health data expansion.",
-            target_criteria="Healthcare SaaS, multi-region expansion signal, headcount > 100",
-            status="Active",
-            channels=["AI Voice Call", "Personalized Email"],
-            total_leads=12,
-            contacted_count=8,
-            interested_count=3,
-            scheduled_meetings=2,
-            response_rate=37.5,
-            created_at="2026-03-03T11:00:00Z"
-        )
-    ]
-
 
 def get_default_opportunities() -> List[Opportunity]:
-    return [
-        Opportunity(
-            id="opp-001",
-            lead_id="lead-001",
-            company_name="FinTrack Analytics",
-            domain="fintrack.io",
-            contact_name="Marcus Vance",
-            contact_email="m.vance@fintrack.io",
-            matched_offering="AuditBot 360 + Posture Guard Bundle",
-            deal_value_estimate="$38,500 ARR",
-            stage="Qualified_Lead",
-            win_probability=75,
-            assigned_rep="David Miller (Senior Enterprise AE)",
-            next_action=NextBestAction(
-                id="act-001",
-                lead_id="lead-001",
-                action_type="schedule_demo",
-                title="Conduct 25-min Technical Deep Dive on Terraform Auto-PRs",
-                rationale="Marcus confirmed two tier-1 banking deals pending SOC 2. He requested a demo for Thursday 2 PM PT with DevOps lead Sarah Lin.",
-                priority="Urgent",
-                suggested_email_or_script=(
-                    "Hi Marcus,\n\nConfirming our session for Thursday at 2:00 PM PT. "
-                    "I've invited Sarah Lin as well. We will focus specifically on how CloudArmor "
-                    "connects to your AWS environment via read-only IAM and outputs pull requests "
-                    "for your infrastructure repo.\n\nLooking forward to it!\nDavid Miller"
-                ),
-                completed=False
-            ),
-            crm_synced=False,
-            crm_target="HubSpot",
-            crm_record_id=None,
-            created_at="2026-03-07T16:00:00Z",
-            updated_at="2026-03-08T09:00:00Z"
-        ),
-        Opportunity(
-            id="opp-002",
-            lead_id="lead-002",
-            company_name="HealthBridge Care",
-            domain="healthbridge.co",
-            contact_name="Dr. Aris Thorne",
-            contact_email="aris.thorne@healthbridge.co",
-            matched_offering="AuditBot 360 (Healthcare/ISO Edition)",
-            deal_value_estimate="$29,000 ARR",
-            stage="Discovery",
-            win_probability=60,
-            assigned_rep="Jessica Hayes (Healthcare Account Director)",
-            next_action=NextBestAction(
-                id="act-002",
-                lead_id="lead-002",
-                action_type="case_study_share",
-                title="Send Telehealth ISO 27001 & GDPR Regulatory Blueprint",
-                rationale="CTO Aris Thorne is evaluating timeline constraints for European clinic rollout in Q2.",
-                priority="High",
-                suggested_email_or_script=(
-                    "Dr. Thorne,\n\nFollowing HealthBridge's announcement regarding European telehealth expansion, "
-                    "here is our 7-step blueprint on how European digital health providers automate ISO 27001 "
-                    "audits and cross-border GDPR compliance in under 3 weeks.\n\nBest,\nJessica Hayes"
-                ),
-                completed=False
-            ),
-            crm_synced=True,
-            crm_target="Salesforce",
-            crm_record_id="SF-098234",
-            created_at="2026-03-06T10:00:00Z",
-            updated_at="2026-03-07T11:00:00Z"
-        )
-    ]
+    return []

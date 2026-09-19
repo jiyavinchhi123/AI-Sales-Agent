@@ -32,6 +32,7 @@ class CallInsights(BaseModel):
     scope_users: Optional[str] = "Not available"
     timeline: Optional[str] = "Not available"
     budget: Optional[str] = "Not disclosed"
+    deal_amount: Optional[str] = "Not available"
     authority: Optional[str] = "Not available"
     target_location: Optional[str] = None
     delivery_location: Optional[str] = None
@@ -51,7 +52,6 @@ class CallSession(BaseModel):
     company_name: str
     contact_name: str
     contact_title: str
-    campaign_id: Optional[str] = None
     status: str = "In_Progress"  # In_Progress, Completed, Failed, Scheduled
     stage: str = "greeting"  # greeting, need, scope, timeline, closing, completed
     duration_seconds: int = 0

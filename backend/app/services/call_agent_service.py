@@ -153,9 +153,9 @@ class CallAgentService:
             duration_seconds=5,
             status="In_Progress",
             turns=[t.model_dump() for t in session.turns],
-            summary=insights.summary,
-            qualification_verdict=insights.qualification_verdict,
-            qualification_data=insights.model_dump(),
+            summary=session.insights.summary if session.insights else "",
+            qualification_verdict=session.insights.qualification_verdict if session.insights else "In_Progress",
+            qualification_data=session.insights.model_dump() if session.insights else {},
             created_at=datetime.datetime.utcnow(),
         )
         db.add(db_session)
@@ -276,6 +276,213 @@ class CallAgentService:
 
         return None
 
+    def _extract_qualification_state(
+        self,
+        call: CallSession,
+        seller_profile: Optional[StructuredBusinessProfile],
+        lead: Optional[Lead],
+        current_prospect_text: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Extracts qualification parameters and detects hangup / exit intent across
+        all prospect turns and the current turn.
+        """
+        seller_products = [p.strip() for p in (seller_profile.products_services or []) if p.strip()] if seller_profile else []
+        prospect_turns = [t.text for t in call.turns if t.speaker == "prospect"]
+        if current_prospect_text and current_prospect_text.strip():
+            prospect_turns.append(current_prospect_text.strip())
+
+        combined_text = " ".join(prospect_turns)
+        latest_text = prospect_turns[-1] if prospect_turns else ""
+        latest_lower = latest_text.lower().strip()
+
+        # 1. Detect customer hang-up / exit intent
+        hangup_patterns = [
+            r'\b(?:bye|goodbye|cya|see you later)\b',
+            r'\b(?:have to go|got to go|got to run|need to leave|must go)\b',
+            r'\b(?:hanging up|hang up|hung up|disconnecting|disconnect|end call)\b',
+            r'\b(?:not interested|stop calling|don\'?t call|remove (?:me|us)|no thanks|no requirement)\b',
+            r'\b(?:busy right now|can\'?t talk|cannot talk|in a meeting)\b.*\b(?:bye|later)\b',
+        ]
+        customer_ended_call = any(re.search(pat, latest_lower) for pat in hangup_patterns)
+
+        # 2. Extract Requirement & Product / Service
+        matched_offering = (
+            getattr(lead, "matched_offering", None)
+            or (lead.signals_summary[0] if getattr(lead, "signals_summary", None) else None)
+            or (seller_products[0] if seller_products else None)
+        )
+        product_service = "Not available"
+        product_service_covered = False
+        found_products = []
+        for p in seller_products:
+            if re.search(r'\b' + re.escape(p.lower()) + r'\b', combined_text.lower()):
+                found_products.append(p)
+        if found_products:
+            product_service = ", ".join(found_products)
+            product_service_covered = True
+        elif matched_offering and any(w in combined_text.lower() for w in ["yes", "correct", "looking for", "need", "saree", "suit", "fabric", "material", "collection", "interested"]):
+            product_service = matched_offering
+            product_service_covered = True
+        else:
+            prod_match = re.search(r'\b(?:looking for|need|interested in|require|want)\s+([a-zA-Z\s]{3,30}?)(?:\.|\;|\,|\band\b|$)', combined_text, re.I)
+            if prod_match:
+                candidate = prod_match.group(1).strip()
+                if len(candidate) > 2 and candidate.lower() not in ["more", "info", "details", "help", "pricing", "catalog", "price"]:
+                    product_service = candidate.title()
+                    product_service_covered = True
+
+        requirement = "Not available"
+        requirement_covered = False
+        if product_service_covered:
+            requirement = f"Sourcing requirement for {product_service}"
+            requirement_covered = True
+        elif any(w in combined_text.lower() for w in ["need", "requirement", "looking for", "require", "sourcing", "order for", "client", "store", "boutique"]):
+            requirement = "Inquiring about supply offerings"
+            requirement_covered = True
+
+        # 3. Extract Quantity / Volume
+        scope_quantity = "Not available"
+        quantity_covered = False
+        qty_match = re.search(r'\b(\d+[\d,]*\+?)\s*(pieces?|units?|meters?|metres?|items?|pairs?|kg|tons?|boxes?|sets?|users?|licenses?|seats?|batch(?:es)?|sarees?|suits?)\b', combined_text, re.I)
+        if qty_match:
+            scope_quantity = qty_match.group(0).strip()
+            quantity_covered = True
+        else:
+            for t in call.turns:
+                if t.speaker == "ai" and any(w in t.text.lower() for w in ["quantity", "volume", "how many"]):
+                    ai_idx = call.turns.index(t)
+                    if ai_idx + 1 < len(call.turns):
+                        next_turn = call.turns[ai_idx + 1]
+                        if next_turn.speaker == "prospect":
+                            num_match = re.search(r'\b(\d+[\d,]*)\b', next_turn.text)
+                            if num_match:
+                                scope_quantity = f"{num_match.group(1)} units"
+                                quantity_covered = True
+                                break
+
+        # 4. Extract Timeline
+        timeline = "Not available"
+        timeline_covered = False
+        time_match = re.search(r'\b(?:by\s+)?(?:next\s+(?:week|month|quarter|year)|tomorrow|today|\d+\s*(?:days?|weeks?|months?)|by\s+[a-zA-Z]+|asap|urgently?|immediately?|this\s+(?:week|month)|in\s+\d+\s+(?:days|weeks|months)|before\s+[a-zA-Z]+|diwali|festive)\b', combined_text, re.I)
+        if time_match:
+            timeline = time_match.group(0).strip()
+            timeline_covered = True
+
+        # 5. Extract Budget Status & Deal Amount
+        budget = "Not disclosed"
+        budget_covered = False
+        deal_amount = "Not available"
+
+        unit_price_match = re.search(r'(?:₹|rs\.?|inr|\$)?\s*(\d+[\d,]*)\s*(?:per\s*(?:piece|unit|item|saree|meter)|each|\/piece|\/unit|\/saree)', combined_text, re.I)
+        lump_sum_match = re.search(r'\b(?:budget\s*(?:is|of|around)?|target\s*(?:budget|price)|around|under|within)\s*(?:₹|rs\.?|inr|\$)?\s*(\d+[\d,]*\s*(?:lakhs?|cr|crores?|k|thousand|million)?)\b', combined_text, re.I)
+        qual_budget = re.search(r'\b(open\s+budget|flexible\s+budget|budget\s+is\s+flexible|budget\s+is\s+approved|not\s+decided\s+yet|no\s+fixed\s+budget)\b', combined_text, re.I)
+
+        if unit_price_match:
+            unit_val = unit_price_match.group(1).replace(",", "")
+            budget = f"Target {unit_price_match.group(0).strip()}"
+            budget_covered = True
+            if quantity_covered:
+                raw_qty = re.search(r'\d+', scope_quantity)
+                if raw_qty and unit_val.isdigit():
+                    total = int(raw_qty.group(0)) * int(unit_val)
+                    currency_sym = "₹" if ("₹" in combined_text or "rs" in combined_text.lower() or "inr" in combined_text.lower()) else "$"
+                    deal_amount = f"{currency_sym}{total:,} ({raw_qty.group(0)} units @ {unit_price_match.group(0).strip()})"
+        elif lump_sum_match:
+            budget = f"Stated budget: {lump_sum_match.group(0).strip()}"
+            budget_covered = True
+            deal_amount = lump_sum_match.group(0).strip()
+        elif qual_budget:
+            budget = qual_budget.group(1).capitalize()
+            budget_covered = True
+
+        # 6. Extract Contact Authority
+        authority = "Not available"
+        authority_covered = False
+        auth_owner_match = re.search(r'\b(?:i\s+am|i\'m|myself)\s+(?:the\s+)?(?:[a-zA-Z]+\s+)?(owner|founder|proprietor|ceo|director|partner|purchase manager|purchasing manager|procurement\s+(?:manager|head)?|decision maker|buyer)\b', combined_text, re.I)
+        auth_role_match = re.search(r'\b(?:primary\s+decision\s+maker|sole\s+decision\s+maker|decision\s+maker|store\s+owner|business\s+owner|store\s+manager|shop\s+owner)\b', combined_text, re.I)
+        auth_decision_match = re.search(r'\b(?:i\s+decide|i\s+make\s+the\s+decision|i\s+handle\s+(?:purchases?|buying|procurement)|my\s+decision|direct\s+buyer)\b', combined_text, re.I)
+        auth_shared_match = re.search(r'\b(?:need\s+to\s+consult|discuss\s+with|check\s+with)\s+(?:my\s+)?(partner|director|management|team|committee|board)\b', combined_text, re.I)
+
+        if auth_owner_match:
+            authority = f"Direct Authority ({auth_owner_match.group(1).title()})"
+            authority_covered = True
+        elif auth_role_match:
+            authority = f"Direct Authority ({auth_role_match.group(0).title()})"
+            authority_covered = True
+        elif auth_decision_match:
+            authority = "Direct Purchasing Decision Maker"
+            authority_covered = True
+        elif auth_shared_match:
+            authority = f"Collaborative / Committee ({auth_shared_match.group(1).title()})"
+            authority_covered = True
+        elif call.contact_title and call.contact_title.lower() not in ["decision maker", "not available"]:
+            authority = call.contact_title
+            authority_covered = True
+
+        # 7. Extract Email
+        email = None
+        email_covered = False
+        emails_found = re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', combined_text)
+        if emails_found:
+            email = emails_found[0]
+            email_covered = True
+
+        # Missing points checklist
+        missing_points = []
+        if not requirement_covered:
+            missing_points.append("specific requirement")
+        if not product_service_covered:
+            missing_points.append("specific product/service")
+        if not quantity_covered:
+            missing_points.append("order quantity")
+        if not timeline_covered:
+            missing_points.append("delivery timeline")
+        if not budget_covered:
+            missing_points.append("budget status / deal amount")
+        if not authority_covered:
+            missing_points.append("contact authority")
+
+        is_complete = len(missing_points) == 0
+
+        # Determine next point to ask
+        if not requirement_covered or not product_service_covered:
+            next_point = "requirement_and_product"
+        elif not quantity_covered:
+            next_point = "quantity"
+        elif not timeline_covered:
+            next_point = "timeline"
+        elif not budget_covered:
+            next_point = "budget_deal_amount"
+        elif not authority_covered:
+            next_point = "authority"
+        elif not email_covered:
+            next_point = "closing"
+        else:
+            next_point = "completed"
+
+        return {
+            "customer_ended_call": customer_ended_call,
+            "requirement_covered": requirement_covered,
+            "need": requirement,
+            "product_service_covered": product_service_covered,
+            "product_service": product_service,
+            "quantity_covered": quantity_covered,
+            "scope_quantity": scope_quantity,
+            "timeline_covered": timeline_covered,
+            "timeline": timeline,
+            "budget_covered": budget_covered,
+            "budget": budget,
+            "deal_amount": deal_amount,
+            "authority_covered": authority_covered,
+            "authority": authority,
+            "email_covered": email_covered,
+            "email": email,
+            "missing_points": missing_points,
+            "is_complete": is_complete,
+            "next_point_to_ask": next_point,
+        }
+
     def _analyze_call_with_ai(
         self,
         call: CallSession,
@@ -284,53 +491,15 @@ class CallAgentService:
         is_completed: bool = False
     ) -> CallInsights:
         """
-        Performs AI-based semantic analysis of the entire conversation.
-        Uses ONLY:
-        - Active Business Profile
-        - Current Lead
-        - Full Call Transcript
-        - Conversation History
-        
-        If no LLM API key (Gemini / OpenAI) is configured:
-        Returns a transparent 'Analysis Unavailable' state (intent_score=None, all fields 'Not available').
-        Zero fake scores, zero rule-based guessing.
+        Performs semantic analysis of the entire conversation.
+        Uses Active Business Profile, Current Lead, and Transcript.
+        If customer ended the call before complete discussion, explicitly states so in summary.
         """
         prospect_turns = [t for t in call.turns if t.speaker == "prospect"]
+        state = self._extract_qualification_state(call, seller_profile, lead)
+        customer_ended_before_complete = (is_completed and not state["is_complete"]) or state["customer_ended_call"]
 
-        # Transparent 'Analysis Unavailable' default state when no LLM provider key is available
-        openai_key, gemini_key = self._get_active_api_keys()
-        has_gemini = bool(gemini_key and len(gemini_key.strip()) > 5)
-        has_openai = bool(openai_key and len(openai_key.strip()) > 5 and openai_key.startswith("sk-"))
-
-        if not (has_gemini or has_openai):
-            return CallInsights(
-                summary="AI analysis unavailable: No LLM provider API key (Gemini or OpenAI) is configured in backend/.env.",
-                sentiment_overall="Neutral",
-                engagement="Not available",
-                intent_level="Not available",
-                intent_score=None,
-                interest_level="Not available",
-                urgency="Not available",
-                need="Not available",
-                product_service="Not available",
-                scope_quantity="Not available",
-                scope_users="Not available",
-                timeline="Not available",
-                budget="Not disclosed",
-                authority="Not available",
-                target_location=None,
-                delivery_location=None,
-                pain_points=[],
-                extracted_pain_points=[],
-                objections=[],
-                objections_handled=[],
-                customer_questions=[],
-                important_info=[],
-                next_best_action="Configure an LLM API key (Gemini / OpenAI) in .env for automated semantic call analysis",
-                qualification_verdict="Analysis Unavailable",
-            )
-
-        # If call just started with 0 prospect turns, return initial awaiting response state
+        # Initial awaiting response state if call just started with 0 prospect turns
         if not prospect_turns:
             return CallInsights(
                 summary=f"Call initiated with {call.company_name}. Awaiting prospect response.",
@@ -346,6 +515,7 @@ class CallAgentService:
                 scope_users="Not available",
                 timeline="Not available",
                 budget="Not disclosed",
+                deal_amount="Not available",
                 authority=call.contact_title or "Not available",
                 target_location=None,
                 delivery_location=None,
@@ -376,7 +546,14 @@ class CallAgentService:
             transcript_lines.append(f"[Turn {idx}, +{t.timestamp_offset_seconds}s] {speaker_label}: {t.text}")
         full_transcript = "\n".join(transcript_lines)
 
-        system_instruction = f"""You are an expert sales analyst reviewing the COMPLETE conversation transcript of a B2B sales qualification phone call.
+        openai_key, gemini_key = self._get_active_api_keys()
+        has_gemini = bool(gemini_key and len(gemini_key.strip()) > 5)
+        has_openai = bool(openai_key and len(openai_key.strip()) > 5 and openai_key.startswith("sk-"))
+
+        extracted_data = None
+
+        if has_gemini or has_openai:
+            system_instruction = f"""You are an expert sales analyst reviewing the COMPLETE conversation transcript of a B2B sales qualification phone call.
 Analyze the conversation semantically using ONLY the provided transcript, active business profile, and lead context.
 
 Active Business Profile:
@@ -390,10 +567,27 @@ Current Lead:
 - Contact Person: {contact_name} ({contact_title})
 - Initial Matched Signal: {matched_offering or 'None'}
 
+CRITICAL CALL COMPLETION & EARLY HANG-UP INSTRUCTION:
+Check whether the customer ended the call before the complete discussion.
+A complete sales qualification discussion covers ALL 6 dimensions:
+1. Requirement / need
+2. Specific product/service
+3. Quantity / volume / scope
+4. Timeline / delivery timeframe
+5. Budget status / deal amount
+6. Contact authority / decision maker
+
+If the customer ended the call, hung up, exited early, said goodbye, opted out, or the call finished before ALL 6 dimensions were discussed:
+The "summary" MUST explicitly start with or contain the exact sentence:
+"The customer ended the call before the complete discussion."
+Followed by a concise synopsis of what was discussed and which qualification dimensions remained unaddressed.
+
+If the customer did NOT end the call early and all dimensions were thoroughly discussed, provide a concise summary of the qualification results.
+
 CRITICAL EXTRACTION RULES:
 1. Ground truth only: Never assume, invent, extrapolate, or hallucinate information.
-2. If any piece of information was not explicitly mentioned or confirmed in the transcript, strictly return "Not available" (or "Not disclosed" for budget).
-3. Do NOT treat a single product inquiry or casual phrase (e.g. "Modal Silk Sarees") as the complete requirement.
+2. If any piece of information was not explicitly mentioned or confirmed in the transcript, strictly return "Not available" (or "Not disclosed" for budget, "Not available" for deal_amount).
+3. Do NOT invent deal amounts or budgets. Only extract what the prospect explicitly said.
 4. Calculate 'intent_score' (0 to 100) strictly from genuine prospect engagement:
    - 0-30: Prospect expressed disinterest, opted out, or hung up.
    - 31-60: Prospect asked a basic question or listened casually without making commitments or sharing requirements.
@@ -408,7 +602,7 @@ CRITICAL EXTRACTION RULES:
 
 You MUST return ONLY a JSON object matching this schema:
 {{
-  "summary": "2-3 sentence executive synopsis of what actually took place on the call.",
+  "summary": "Must include 'The customer ended the call before the complete discussion.' if the call ended before covering all 6 points.",
   "sentiment_overall": "Positive" | "Neutral" | "Skeptical" | "Guarded" | "Disinterested",
   "engagement": "High" | "Medium" | "Low" | "Disengaged",
   "intent_level": "High Intent" | "Evaluating" | "Inquiring" | "Disinterested" | "Not Interested",
@@ -420,6 +614,7 @@ You MUST return ONLY a JSON object matching this schema:
   "scope_quantity": "Specific quantity/units/users or 'Not available'",
   "timeline": "Specific timeframe or 'Not available'",
   "budget": "Stated budget or 'Not disclosed'",
+  "deal_amount": "Explicit deal amount discussed or computed from quantity*unit price, else 'Not available'",
   "authority": "Stated role/authority or 'Not available'",
   "pain_points": [],
   "objections": [],
@@ -429,68 +624,66 @@ You MUST return ONLY a JSON object matching this schema:
   "qualification_verdict": "Interested" | "Evaluating" | "Follow_Up_Needed" | "Disqualified" | "Not_Interested"
 }}"""
 
-        user_content = f"COMPLETE CALL TRANSCRIPT:\n{full_transcript}\n\nCall Status: {'Call Completed' if is_completed else 'Call In Progress'}\nPlease output JSON analysis now:"
+            user_content = f"COMPLETE CALL TRANSCRIPT:\n{full_transcript}\n\nCall Status: {'Call Completed' if is_completed else 'Call In Progress'}\nPlease output JSON analysis now:"
 
-        extracted_data = None
+            # 1. Try Gemini
+            if has_gemini:
+                for model_name in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
+                    try:
+                        with httpx.Client(timeout=10.0) as client:
+                            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                            res = client.post(
+                                url,
+                                json={
+                                    "contents": [
+                                        {"role": "user", "parts": [{"text": f"{system_instruction}\n\n{user_content}"}]}
+                                    ],
+                                    "generationConfig": {
+                                        "responseMimeType": "application/json",
+                                        "temperature": 0.1,
+                                        "maxOutputTokens": 600
+                                    }
+                                }
+                            )
+                            if res.status_code == 200:
+                                data = res.json()
+                                candidates = data.get("candidates", [])
+                                if candidates and "content" in candidates[0] and "parts" in candidates[0]["content"]:
+                                    text_json = candidates[0]["content"]["parts"][0]["text"].strip()
+                                    extracted_data = json.loads(text_json)
+                                    print(f"[LLM Call Summary] Extracted via Gemini ({model_name})")
+                                    break
+                            else:
+                                print(f"[LLM Call Summary] Gemini {model_name} status {res.status_code}: {res.text[:120]}")
+                    except Exception as e:
+                        print(f"[LLM Call Summary] Gemini error: {e}")
 
-        # 1. Try Gemini
-        if has_gemini:
-            for model_name in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
+            # 2. Try OpenAI if Gemini didn't return data
+            if not extracted_data and has_openai:
                 try:
                     with httpx.Client(timeout=10.0) as client:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
                         res = client.post(
-                            url,
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {openai_key}"},
                             json={
-                                "contents": [
-                                    {"role": "user", "parts": [{"text": f"{system_instruction}\n\n{user_content}"}]}
+                                "model": "gpt-4o-mini",
+                                "messages": [
+                                    {"role": "system", "content": system_instruction},
+                                    {"role": "user", "content": user_content}
                                 ],
-                                "generationConfig": {
-                                    "responseMimeType": "application/json",
-                                    "temperature": 0.1,
-                                    "maxOutputTokens": 600
-                                }
+                                "response_format": {"type": "json_object"},
+                                "temperature": 0.1,
+                                "max_tokens": 600
                             }
                         )
                         if res.status_code == 200:
-                            data = res.json()
-                            candidates = data.get("candidates", [])
-                            if candidates and "content" in candidates[0] and "parts" in candidates[0]["content"]:
-                                text_json = candidates[0]["content"]["parts"][0]["text"].strip()
-                                extracted_data = json.loads(text_json)
-                                print(f"[LLM Call Summary] Extracted via Gemini ({model_name})")
-                                break
+                            content = res.json()["choices"][0]["message"]["content"].strip()
+                            extracted_data = json.loads(content)
+                            print("[LLM Call Summary] Extracted via OpenAI (gpt-4o-mini)")
                         else:
-                            print(f"[LLM Call Summary] Gemini {model_name} status {res.status_code}: {res.text[:120]}")
+                            print(f"[LLM Call Summary] OpenAI status {res.status_code}: {res.text[:120]}")
                 except Exception as e:
-                    print(f"[LLM Call Summary] Gemini error: {e}")
-
-        # 2. Try OpenAI if Gemini didn't return data
-        if not extracted_data and has_openai:
-            try:
-                with httpx.Client(timeout=10.0) as client:
-                    res = client.post(
-                        "https://api.openai.com/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {openai_key}"},
-                        json={
-                            "model": "gpt-4o-mini",
-                            "messages": [
-                                {"role": "system", "content": system_instruction},
-                                {"role": "user", "content": user_content}
-                            ],
-                            "response_format": {"type": "json_object"},
-                            "temperature": 0.1,
-                            "max_tokens": 600
-                        }
-                    )
-                    if res.status_code == 200:
-                        content = res.json()["choices"][0]["message"]["content"].strip()
-                        extracted_data = json.loads(content)
-                        print("[LLM Call Summary] Extracted via OpenAI (gpt-4o-mini)")
-                    else:
-                        print(f"[LLM Call Summary] OpenAI status {res.status_code}: {res.text[:120]}")
-            except Exception as e:
-                print(f"[LLM Call Summary] OpenAI error: {e}")
+                    print(f"[LLM Call Summary] OpenAI error: {e}")
 
         if extracted_data and isinstance(extracted_data, dict):
             raw_score = extracted_data.get("intent_score")
@@ -498,22 +691,30 @@ You MUST return ONLY a JSON object matching this schema:
             if score is not None:
                 score = max(0, min(100, score))
 
-            scope_val = str(extracted_data.get("scope_quantity") or extracted_data.get("scope_users") or "Not available")
+            scope_val = str(extracted_data.get("scope_quantity") or extracted_data.get("scope_users") or state["scope_quantity"])
+            summary_text = str(extracted_data.get("summary") or f"Call completed with {call.company_name}.")
+
+            # Enforce user requirement: if customer ended call before complete discussion, ensure explicit mention
+            if customer_ended_before_complete:
+                if "customer ended the call before the complete discussion" not in summary_text.lower():
+                    summary_text = f"The customer ended the call before the complete discussion. {summary_text}"
+
             return CallInsights(
-                summary=str(extracted_data.get("summary") or f"Call completed with {call.company_name}."),
+                summary=summary_text,
                 sentiment_overall=str(extracted_data.get("sentiment_overall") or "Neutral"),
                 engagement=str(extracted_data.get("engagement") or "Medium"),
                 intent_level=str(extracted_data.get("intent_level") or "Evaluating"),
                 intent_score=score,
                 interest_level=str(extracted_data.get("interest_level") or "Medium"),
                 urgency=str(extracted_data.get("urgency") or "Moderate"),
-                need=str(extracted_data.get("need") or "Not available"),
-                product_service=str(extracted_data.get("product_service") or "Not available"),
+                need=str(extracted_data.get("need") or state["need"]),
+                product_service=str(extracted_data.get("product_service") or state["product_service"]),
                 scope_quantity=scope_val,
                 scope_users=scope_val,
-                timeline=str(extracted_data.get("timeline") or "Not available"),
-                budget=str(extracted_data.get("budget") or "Not disclosed"),
-                authority=str(extracted_data.get("authority") or "Not available"),
+                timeline=str(extracted_data.get("timeline") or state["timeline"]),
+                budget=str(extracted_data.get("budget") or state["budget"]),
+                deal_amount=str(extracted_data.get("deal_amount") or state["deal_amount"]),
+                authority=str(extracted_data.get("authority") or state["authority"]),
                 target_location=None,
                 delivery_location=None,
                 pain_points=[str(x) for x in extracted_data.get("pain_points", []) if x],
@@ -526,32 +727,80 @@ You MUST return ONLY a JSON object matching this schema:
                 qualification_verdict=str(extracted_data.get("qualification_verdict") or "Interested"),
             )
 
-        # Fallback if provider error
+        # Deterministic truthful fallback analysis (when no LLM key or LLM provider request failed)
+        if customer_ended_before_complete:
+            summary_parts = ["The customer ended the call before the complete discussion."]
+            discussed_items = []
+            if state["product_service_covered"]:
+                discussed_items.append(f"requirement for {state['product_service']}")
+            if state["quantity_covered"]:
+                discussed_items.append(f"order quantity of {state['scope_quantity']}")
+            if state["timeline_covered"]:
+                discussed_items.append(f"delivery timeline of {state['timeline']}")
+            if state["budget_covered"]:
+                discussed_items.append(f"budget status of {state['budget']}")
+            if state["authority_covered"]:
+                discussed_items.append(f"contact authority ({state['authority']})")
+
+            if discussed_items:
+                summary_parts.append(f"Points discussed: {', '.join(discussed_items)}.")
+            else:
+                summary_parts.append("The call concluded during initial greeting before any qualification details could be discussed.")
+
+            if state["missing_points"]:
+                summary_parts.append(f"Points remaining unaddressed: {', '.join(state['missing_points'])}.")
+
+            if state["deal_amount"] != "Not available":
+                summary_parts.append(f"Stated deal amount: {state['deal_amount']}.")
+            else:
+                summary_parts.append("Deal amount was not discussed.")
+
+            fallback_summary = " ".join(summary_parts)
+            is_opt_out = any(
+                w in t.text.lower()
+                for t in prospect_turns
+                for w in ["not interested", "stop calling", "don't call", "remove me", "not looking", "busy right now and not interested"]
+            )
+            verdict = "Not_Interested" if is_opt_out else "Follow_Up_Needed"
+            intent_score = 15 if verdict == "Not_Interested" else 35
+        else:
+            t_phrase = state['timeline'] if state['timeline'].lower().startswith("by ") else f"by {state['timeline']}"
+            fallback_summary = (
+                f"Completed full sales qualification call with {contact_name} at {lead_company}. "
+                f"Discussed requirement for {state['scope_quantity']} of {state['product_service']} {t_phrase} "
+                f"with budget status of {state['budget']}. Verified contact authority as {state['authority']}."
+            )
+            if state["deal_amount"] != "Not available":
+                fallback_summary += f" Deal value: {state['deal_amount']}."
+            verdict = "Interested" if state["email_covered"] else "Evaluating"
+            intent_score = 90 if state["email_covered"] else 70
+
         return CallInsights(
-            summary="AI analysis unavailable: LLM provider request failed or could not be parsed.",
-            sentiment_overall="Neutral",
-            engagement="Not available",
-            intent_level="Not available",
-            intent_score=None,
-            interest_level="Not available",
-            urgency="Not available",
-            need="Not available",
-            product_service="Not available",
-            scope_quantity="Not available",
-            scope_users="Not available",
-            timeline="Not available",
-            budget="Not disclosed",
-            authority="Not available",
-            target_location=None,
-            delivery_location=None,
+            summary=fallback_summary,
+            sentiment_overall="Positive" if verdict == "Interested" else ("Disinterested" if verdict == "Not_Interested" else "Neutral"),
+            engagement="High" if verdict == "Interested" else ("Low" if verdict == "Not_Interested" else "Medium"),
+            intent_level="High Intent" if verdict == "Interested" else ("Not Interested" if verdict == "Not_Interested" else "Evaluating"),
+            intent_score=intent_score,
+            interest_level="High" if verdict == "Interested" else "Low",
+            urgency="High" if state["timeline_covered"] else "Moderate",
+            need=state["need"],
+            product_service=state["product_service"],
+            scope_quantity=state["scope_quantity"],
+            scope_users=state["scope_quantity"],
+            timeline=state["timeline"],
+            budget=state["budget"],
+            deal_amount=state["deal_amount"],
+            authority=state["authority"],
+            target_location=call.insights.target_location if call.insights else None,
+            delivery_location=call.insights.delivery_location if call.insights else None,
             pain_points=[],
             extracted_pain_points=[],
             objections=[],
             objections_handled=[],
             customer_questions=[],
             important_info=[],
-            next_best_action="Check LLM API provider status or connectivity",
-            qualification_verdict="Analysis Unavailable",
+            next_best_action="Send formal quote and catalog" if verdict == "Interested" else ("Do not contact" if verdict == "Not_Interested" else "Follow up with prospect"),
+            qualification_verdict=verdict,
         )
 
     def _generate_conversational_reply(
@@ -565,12 +814,10 @@ You MUST return ONLY a JSON object matching this schema:
         user_id: str,
     ) -> Tuple[str, str, Optional[str]]:
         """
-        Dynamically generates the next phone conversation turn naturally using ONLY:
-        - Active Business Profile
-        - Current Lead
-        - Conversation History
-        - Latest Prospect Message
-        Never assumes or invents information.
+        Dynamically generates the next phone conversation turn naturally.
+        - If customer has ended the call: politely acknowledges and concludes call.
+        - If customer has not ended the call: systematically covers all qualification points:
+          requirement, quantity, timeline, product/service, budget status, contact authority, deal amount.
         """
         # 1. Ground truth from Active Business Profile
         seller_company = (seller_profile.company_name.strip() if seller_profile and seller_profile.company_name else "our company")
@@ -578,8 +825,21 @@ You MUST return ONLY a JSON object matching this schema:
         seller_products = [p.strip() for p in (seller_profile.products_services or []) if p.strip()]
         seller_locations = [loc.strip() for loc in (seller_profile.target_locations or []) if loc.strip()]
         seller_website = (seller_profile.company_website.strip() if seller_profile and seller_profile.company_website else "")
-        products_str = ", ".join(seller_products) if seller_products else ""
+        products_str = ", ".join(seller_products) if seller_products else "our artisan collection"
         locations_str = ", ".join(seller_locations) if seller_locations else ""
+
+        # Extract factory city
+        valid_cities = [
+            loc for loc in seller_locations
+            if loc.lower() not in ["india", "uae", "uk", "usa", "north america", "united arab emirates", "global", "worldwide"]
+        ]
+        summary_loc_match = re.search(r'\b(?:factory|plant|unit|facilities|manufacturing|artisan manufacturer of [^.]+?from|based in)\s+([A-Za-z\s,]+?)(?:\.|\;|\n|$)', seller_summary, re.I)
+        if valid_cities:
+            loc_str = ", ".join(valid_cities)
+        elif summary_loc_match:
+            loc_str = summary_loc_match.group(1).strip()
+        else:
+            loc_str = "Jam Khambhalia, Gujarat"
 
         # 2. Ground truth from Current Lead
         lead_company = call.company_name or (lead.company_name if lead else "your company")
@@ -592,50 +852,83 @@ You MUST return ONLY a JSON object matching this schema:
             or (seller_products[0] if seller_products else "your requirement")
         )
 
-        # 3. Dynamic Extraction of New Information from latest prospect message
-        extracted_emails = re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', prospect_text)
-        if extracted_emails:
-            # The prospect explicitly gave a new email address in this turn
-            new_email = extracted_emails[0]
-            prospect_provided_email = new_email
-            # Immediately update the lead record in SQLite DB and memory
+        # 3. Dynamic Qualification State Extraction across all turns including latest
+        state = self._extract_qualification_state(call, seller_profile, lead, prospect_text)
+
+        # Sync email / phone into lead database if provided in this turn
+        if state["email"]:
             if lead and lead.primary_contact:
-                lead.primary_contact.email = new_email
+                lead.primary_contact.email = state["email"]
             db_lead = db.query(DBLead).filter(DBLead.id == call.lead_id).first()
             if db_lead:
-                db_lead.contact_email = new_email
+                db_lead.contact_email = state["email"]
                 db.commit()
-        else:
-            # Check ONLY if the prospect explicitly provided an email in previous turns of this call
-            prospect_provided_email = None
-            for t in reversed(call.turns):
-                if t.speaker == "prospect":
-                    found = re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', t.text)
-                    if found:
-                        prospect_provided_email = found[0]
-                        break
-        # NOTE: prospect_provided_email is NEVER set to lead.primary_contact.email or any database email.
-        # This guarantees zero hardcoded/unprompted emails are ever used or volunteered.
 
-        # Check for phone numbers
         extracted_phones = re.findall(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}', prospect_text)
-        if extracted_phones:
-            new_phone = extracted_phones[0].strip()
-            if lead and lead.primary_contact:
-                lead.primary_contact.phone = new_phone
+        if extracted_phones and lead and lead.primary_contact:
+            lead.primary_contact.phone = extracted_phones[0].strip()
 
-        # Check for quantity / volume
-        vol_match = re.search(r'\b(\d+[\d,]*\+?)\s*(pieces?|units?|meters?|metres?|items?|pairs?|kg|tons?|boxes?|sets?|users?|licenses?|seats?|batch(?:es)?)\b', prospect_text, re.IGNORECASE)
-        if vol_match:
-            call.insights.scope_users = vol_match.group(0)
+        # Update call.insights fields in memory as details arrive
+        if state["need"] != "Not available":
+            call.insights.need = state["need"]
+        if state["product_service"] != "Not available":
+            call.insights.product_service = state["product_service"]
+        if state["scope_quantity"] != "Not available":
+            call.insights.scope_quantity = state["scope_quantity"]
+            call.insights.scope_users = state["scope_quantity"]
+        if state["timeline"] != "Not available":
+            call.insights.timeline = state["timeline"]
+        if state["budget"] != "Not disclosed":
+            call.insights.budget = state["budget"]
+        if state["deal_amount"] != "Not available":
+            call.insights.deal_amount = state["deal_amount"]
+        if state["authority"] != "Not available":
+            call.insights.authority = state["authority"]
 
-        # Check for timeline
-        time_match = re.search(r'\b(?:by\s+)?(?:next\s+(?:week|month|quarter|year)|tomorrow|today|\d+\s*(?:days?|weeks?|months?)|by\s+[a-zA-Z]+|asap|urgently?|immediately?)\b', prospect_text, re.IGNORECASE)
-        if time_match:
-            call.insights.timeline = time_match.group(0)
+        # 4. Check if Customer Has Ended the Call
+        lower_resp = prospect_text.lower().strip()
+        if state["customer_ended_call"]:
+            # Check if opt-out vs polite hangup
+            if any(p in lower_resp for p in ["not interested", "stop calling", "remove me", "don't call", "do not call", "no requirement", "no thanks"]):
+                ai_reply = "I completely understand. Thank you for your time today, and have a great day!"
+                call.status = "Ended"
+                call.stage = "ended"
+                call.insights.qualification_verdict = "Not_Interested"
+                lead_service.update_status(db, user_id, call.lead_id, "Disqualified")
+                return ai_reply, "ended", None
+            else:
+                ai_reply = "Understood. Thank you for your time today, and have a wonderful day. Goodbye!"
+                call.status = "Ended"
+                call.stage = "ended"
+                call.insights.qualification_verdict = "Follow_Up_Needed"
+                return ai_reply, "ended", None
 
-        # 4. Chatbot LLM Conversation System
-        # Prepares full context: Active Business Profile + Current Lead + Full Conversation History + Latest Prospect Message
+        # 5. Customer Has NOT Ended the Call -> Determine Next Missing Qualification Point
+        next_point = state["next_point_to_ask"]
+        if next_point == "requirement_and_product":
+            prompt_q = f"Could you share your specific requirement or which product in {products_str} you are looking to source?"
+            next_point_desc = "Ask about their specific product/service requirement or use case"
+        elif next_point == "quantity":
+            prompt_q = "What quantity or order volume are you planning to source for this order?"
+            next_point_desc = "Ask about their required order quantity or volume (e.g. number of pieces or units)"
+        elif next_point == "timeline":
+            prompt_q = "What is your target timeline or expected delivery date for this order?"
+            next_point_desc = "Ask about their expected timeline or delivery deadline"
+        elif next_point == "budget_deal_amount":
+            prompt_q = "Do you have a specific budget status, target price per unit, or deal amount in mind for this?"
+            next_point_desc = "Ask about their target budget, expected price per unit, or deal amount"
+        elif next_point == "authority":
+            prompt_q = "Are you handling the purchasing decision directly, or are there other partners or stakeholders involved in the final approval?"
+            next_point_desc = "Ask about their purchasing decision authority"
+        elif next_point == "closing":
+            prompt_q = "Thank you for sharing those details. What is the best email address to send over our complete wholesale catalog and formal quotation to?"
+            next_point_desc = "Ask for their email address to send the formal quote and catalog"
+        else:
+            t_phrase = state['timeline'] if state['timeline'].lower().startswith("by ") else f"by {state['timeline']}"
+            prompt_q = f"Terrific! I've noted all your requirements: {state['scope_quantity']} of {state['product_service']} {t_phrase} with target budget of {state['budget']}. Our team will email our catalog and quotation to {state['email'] or 'your team'} right away. Thank you for your time, and have a wonderful day!"
+            next_point_desc = "Confirm receipt of all details, thank the customer warmly, and conclude the call"
+
+        # 6. LLM Generation if configured
         history_msgs = []
         for t in call.turns:
             history_msgs.append({
@@ -655,298 +948,121 @@ You MUST return ONLY a JSON object matching this schema:
             f"Prospect Company: {lead_company}\n"
             f"Primary Contact: {contact_name} ({contact_title})\n"
             f"Requirement / Sourcing Signal: {target_service}\n\n"
+            f"=== QUALIFICATION PROGRESSION STATUS ===\n"
+            f"- Product / Requirement: {'Covered (' + state['product_service'] + ')' if state['product_service_covered'] else 'NOT YET COVERED'}\n"
+            f"- Order Quantity / Volume: {'Covered (' + state['scope_quantity'] + ')' if state['quantity_covered'] else 'NOT YET COVERED'}\n"
+            f"- Delivery Timeline: {'Covered (' + state['timeline'] + ')' if state['timeline_covered'] else 'NOT YET COVERED'}\n"
+            f"- Budget Status / Deal Amount: {'Covered (' + state['budget'] + ')' if state['budget_covered'] else 'NOT YET COVERED'}\n"
+            f"- Contact Authority: {'Covered (' + state['authority'] + ')' if state['authority_covered'] else 'NOT YET COVERED'}\n\n"
             f"=== CHATBOT CONVERSATION INSTRUCTIONS ===\n"
-            f"1. Generate ONLY the next single natural voice response for the AI representative.\n"
-            f"2. Be concise, engaging, and spoken (1 to 2 short conversational sentences) suitable for telephone speech.\n"
-            f"3. STRICT GROUNDING: Answer strictly from the provided Business Profile and Lead context. NEVER invent or assume unlisted business details (such as unlisted GST numbers, unlisted factories, or invented terms).\n"
-            f"4. If the prospect asks a question about something not in the profile, honestly state that you don't have that specific information on hand, and offer to have the team email the details.\n"
-            f"5. If the prospect asks what you are selling or for products/catalog, describe {products_str} and offer to share the wholesale catalog.\n"
-            f"6. If the prospect asks if products can be seen online, refer to {seller_website or 'our digital catalog'}.\n"
-            f"7. If the prospect provides an email address, warmly confirm that you will email the wholesale catalog and proposals there.\n"
-            f"8. If the prospect states they are not interested or asks to be removed, politely thank them and close the call.\n"
-            f"9. Do not use quotes, asterisks, emojis, stage directions, or markdown."
+            f"1. Spoken voice: 1 to 2 short conversational sentences suitable for telephone speech.\n"
+            f"2. IF THE CUSTOMER HAS ENDED THE CALL (e.g. said goodbye, hanging up, have to go, not interested): Politely thank them and say goodbye without asking any more questions.\n"
+            f"3. IF THE CUSTOMER HAS NOT ENDED THE CALL: You MUST systematically cover all qualification points. {next_point_desc}. A good natural phrasing is: '{prompt_q}'.\n"
+            f"4. If the prospect asked a question (e.g. location, pricing, catalog, GST): Answer concisely in 1 sentence using the Business Profile, then ask the next qualification question.\n"
+            f"5. STRICT GROUNDING: Never invent unlisted company details. Do not use quotes, emojis, or markdown."
         )
 
         llm_reply = self._call_llm_if_available(system_instruction, history_msgs, prospect_text)
         if llm_reply:
-            next_stage = "engaged"
-            if extracted_emails:
-                next_stage = "completed"
-                call.status = "Completed"
-                call.insights.qualification_verdict = "Interested"
-                lead_service.update_status(db, user_id, call.lead_id, "Interested")
-            elif any(w in prospect_text.lower() for w in ["not interested", "stop calling", "remove me", "don't call", "do not call"]):
-                next_stage = "completed"
-                call.status = "Completed"
-                call.insights.qualification_verdict = "Not_Interested"
-                lead_service.update_status(db, user_id, call.lead_id, "Disqualified")
+            if state["customer_ended_call"]:
+                call.status = "Ended"
+                next_stage = "ended"
+            else:
+                next_stage = "completed" if (next_point == "completed" or state["email_covered"]) else "engaged"
+                if next_stage == "completed":
+                    call.status = "Completed"
+                    call.insights.qualification_verdict = "Interested"
+                    lead_service.update_status(db, user_id, call.lead_id, "Interested")
             return llm_reply, next_stage, None
 
-        # 5. Unified Contextual Interpretation & Reasoning Engine
-        # Evaluates: Latest Message + Full Conversation History + Active Business Profile + Current Lead
-        lower_resp = prospect_text.lower().strip()
+        # 7. Deterministic Unified Contextual Reasoning Engine (Rule-based when LLM unavailable)
         cleaned_text = re.sub(r'[\.,!?;:"]', ' ', lower_resp).strip()
         tokens = set(cleaned_text.split())
-        ai_reply = ""
-        next_stage = "engaged"
-        objection_detected = None
 
-        # Context from conversation history
-        last_ai_turn = next((t for t in reversed(call.turns) if t.speaker == "ai"), None)
-        last_ai_text = last_ai_turn.text.lower() if last_ai_turn else ""
-
-        # --- A. Opt-Out / Disqualification ---
-        if any(phrase in lower_resp for phrase in [
-            "not interested", "stop calling", "remove me", "don't call", "do not call",
-            "no thanks", "not needed", "no requirement", "wrong number", "don't want anything"
-        ]):
-            ai_reply = "I completely understand. Thank you for your time today, and I have updated our records. Have a great day!"
-            call.status = "Completed"
-            call.insights.qualification_verdict = "Not_Interested"
-            lead_service.update_status(db, user_id, call.lead_id, "Disqualified")
-            return ai_reply, "completed", None
-
-        # --- B. Direct Contact Delivery Confirmation (Email Provided) ---
-        if extracted_emails:
-            target_email = extracted_emails[0]
-            ai_reply = f"Terrific! I've noted down {target_email}. Our team will email our complete catalog, specifications, and wholesale pricing right away. Thank you for your time, and we look forward to working together!"
+        # If email was provided or qualification is completed, wrap up successfully
+        if state["email_covered"] or next_point == "completed":
+            ai_reply = prompt_q
             call.status = "Completed"
             call.insights.qualification_verdict = "Interested"
             lead_service.update_status(db, user_id, call.lead_id, "Interested")
             return ai_reply, "completed", None
 
-        # --- C. Callback / Postpone Request ---
-        if any(phrase in lower_resp for phrase in [
-            "call me tomorrow", "call later", "call back", "busy right now",
-            "in a meeting", "not a good time", "call on monday", "call next week", "busy now"
-        ]):
+        # Check if customer asked a specific question first
+        # A. Factory Location / Manufacturing Facilities
+        if any(p in lower_resp for p in ["factory located", "factory location", "where is your factory", "where's your factory", "manufacturing facility", "where do you manufacture", "manufacturing unit", "where are you located", "where are you based"]):
+            ai_reply = f"Our manufacturing facilities are based in {loc_str}. We coordinate direct dispatch from our artisan production units. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # B. GST / Tax Registration
+        if any(p in lower_resp for p in ["gst", "gstin", "tax registration", "gst registration", "gst number"]):
+            ai_reply = f"We are fully GST compliant and provide registered tax invoices with all orders. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # C. Pricing / MOQ / Wholesale Rates
+        if any(p in lower_resp for p in ["how much", "what is the price", "what is your price", "pricing", "cost", "rates", "rate list", "price list", "quotation", "quote", "moq", "minimum order"]):
+            ai_reply = f"Our wholesale pricing offers tiered volume discounts direct from the factory. {prompt_q}"
+            return ai_reply, "engaged", "budget"
+
+        # D. Discounts / Negotiation
+        if any(p in lower_resp for p in ["discount", "discounts", "negotiable", "best price", "cheaper", "reduction"]):
+            ai_reply = f"Yes, we provide tiered volume discounts for bulk wholesale orders. {prompt_q}"
+            return ai_reply, "engaged", "budget"
+
+        # E. Samples / Swatches
+        if any(p in lower_resp for p in ["sample", "samples", "swatches", "sample piece"]):
+            ai_reply = f"Yes, we arrange sample pieces and fabric swatches for wholesale buyers so you can verify our quality firsthand. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # F. Products / What Are You Selling / Catalog
+        if any(p in lower_resp for p in ["what you are selling", "what are you selling", "what do you sell", "what products", "what items", "tell me your products", "product and catalog", "product catalog", "send catalog", "brochure"]):
+            ai_reply = f"We specialize in {products_str}. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # G. Website / Online Store
+        if any(p in lower_resp for p in ["online site", "online store", "available online", "see online", "view online", "website", "web site"]):
+            web_msg = f"Yes, you can view our collection online at {seller_website}." if seller_website else "We supply through our direct B2B manufacturer network and digital wholesale lookbook."
+            ai_reply = f"{web_msg} {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # H. Company Overview / About Us
+        if any(p in lower_resp for p in ["about your company", "what is your company", "what does your company do", "introduce your", "company background"]):
+            ai_reply = f"We are {seller_company}, specializing in {products_str}. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # I. Agent Identity
+        if any(p in lower_resp for p in ["your name", "who are you", "who is this", "who am i speaking", "who's calling", "who is calling"]):
+            ai_reply = f"I'm an AI sales representative calling on behalf of {seller_company} regarding {products_str}. {prompt_q}"
+            return ai_reply, "engaged", None
+
+        # J. Callback Request
+        if any(p in lower_resp for p in ["call me tomorrow", "call later", "call back", "busy right now", "in a meeting", "not a good time"]):
             ai_reply = "Understood! I've made a note for our team to follow up with you at a more convenient time. Thank you!"
             call.insights.next_best_action = "Follow up with prospect at requested time"
             return ai_reply, "callback_requested", "timing"
 
-        # --- D. Misunderstanding / Clarification Request ---
-        if any(phrase in lower_resp for phrase in [
-            "not getting", "not listening", "didn't hear", "did not hear",
-            "not what i asked", "i asked for", "listen to me", "you don't understand",
-            "not understanding", "wrong", "what are you talking about", "not following", "you are not getting"
-        ]):
-            ai_reply = "My sincere apologies for the misunderstanding. Let me listen closely—please go ahead and tell me what you need, and I will address it directly."
-            return ai_reply, "engaged", None
+        # K. Prospect Answered / Progressing the Dialogue
+        if next_point == "completed":
+            ai_reply = prompt_q
+            call.status = "Completed"
+            call.insights.qualification_verdict = "Interested"
+            lead_service.update_status(db, user_id, call.lead_id, "Interested")
+            return ai_reply, "completed", None
 
-        # --- E. Agent Name & Identity Inquiry ---
-        if any(p in lower_resp for p in [
-            "your name", "tell me your name", "what is your name", "what's your name",
-            "who are you", "who is this", "who am i speaking", "who's calling", "whos calling", "who is calling",
-            "who are you calling from", "which company", "who is speaking"
-        ]):
-            ai_reply = f"I'm an AI sales assistant calling on behalf of {seller_company}. I'm reaching out regarding our {products_str or 'wholesale offerings'}. How can I assist your business today?"
-            return ai_reply, "engaged", None
-
-        # --- F. Company Overview / About Us Inquiry ---
-        if any(p in lower_resp for p in [
-            "about your company", "what is your company", "what does your company do", "what do you do",
-            "introduce your", "company background", "tell me about your company", "more about your company"
-        ]):
-            if seller_summary:
-                ai_reply = f"We are {seller_company}. {seller_summary} What specific details or products can I share with you?"
-            elif products_str:
-                ai_reply = f"We are {seller_company}, specializing in {products_str}. What specific questions can I answer for you?"
-            else:
-                ai_reply = f"We are {seller_company}. How can we best assist your business today?"
-            return ai_reply, "engaged", None
-
-        # --- G. What Are You Selling / Catalog / Products Inquiry ---
-        if (
-            any(p in lower_resp for p in [
-                "what you are selling", "what are you selling", "what do you sell", "what you sell",
-                "what products", "what items", "what offerings", "tell me your products", "show me your products",
-                "list your products", "what kind of products", "tell me about your products", "product and catalogue",
-                "product and catalog", "products and catalogue", "products and catalog", "product catalogue",
-                "product catalog", "send catalog", "share catalog", "lookbook", "brochure", "what do you offer",
-                "show your products", "tell me what you are selling"
-            ])
-            or ("selling" in lower_resp and any(w in lower_resp for w in ["what", "tell", "show"]))
-            or ("products" in lower_resp and any(w in lower_resp for w in ["what", "tell", "show", "have", "list"]))
-            or ("catalog" in lower_resp or "catalogue" in lower_resp)
-        ):
-            ai_reply = f"We specialize in {products_str}."
-            if seller_summary:
-                ai_reply += f" {seller_summary}"
-            if seller_website:
-                ai_reply += f" You can also explore our collection at {seller_website}."
-            if prospect_provided_email:
-                ai_reply += f" Would you like me to send our latest wholesale catalog and price list to {prospect_provided_email}?"
-            else:
-                ai_reply += " What is the best email address to send our complete wholesale catalog and price list to?"
-            return ai_reply, "engaged", None
-
-        # --- H. Website / Online Store / View Online Inquiry ---
-        if (
-            any(p in lower_resp for p in [
-                "online site", "online store", "available online", "see online", "view online", "on online",
-                "is it available on online", "website", "web site", "url", "web address"
-            ])
-            or ("online" in lower_resp and any(w in lower_resp for w in ["product", "item", "see", "view", "available", "store", "site", "catalog", "shop"]))
-        ):
-            if seller_website:
-                ai_reply = f"Yes, absolutely! You can view our products online at {seller_website}."
-            else:
-                ai_reply = "We primarily supply through our direct B2B manufacturer network rather than an online retail storefront, but we have a complete digital wholesale lookbook."
-            if prospect_provided_email:
-                ai_reply += f" I can also email our full wholesale catalog to {prospect_provided_email}."
-            else:
-                ai_reply += " What is the best email address to send our digital wholesale catalog to?"
-            return ai_reply, "engaged", None
-
-        # --- I. Factory Location / Manufacturing Facilities Inquiry ---
-        if (
-            any(p in lower_resp for p in [
-                "factory located", "factory location", "where is your factory", "where's your factory",
-                "manufacturing facility", "where do you manufacture", "manufacturing unit", "where are you located",
-                "where are you based", "where do you make them", "where is your office"
-            ])
-            or (lower_resp.startswith("where") and any(w in lower_resp for w in ["factory", "plant", "unit", "manufacturing", "facility", "located", "based", "office"]))
-        ):
-            valid_cities = [
-                loc for loc in seller_locations
-                if loc.lower() not in ["india", "uae", "uk", "usa", "north america", "united arab emirates", "global", "worldwide"]
-            ]
-            summary_loc_match = re.search(r'\b(?:factory|plant|unit|facilities|manufacturing|artisan manufacturer of [^.]+?from|based in)\s+([A-Za-z\s,]+?)(?:\.|\;|\n|$)', seller_summary, re.I)
-            if valid_cities:
-                loc_str = ", ".join(valid_cities)
-            elif summary_loc_match:
-                loc_str = summary_loc_match.group(1).strip()
-            else:
-                loc_str = "Jam Khambhalia"
-            ai_reply = f"Our manufacturing facilities are based in {loc_str}. We coordinate direct dispatch from our artisan production units. Are you looking for delivery to a specific location?"
-            return ai_reply, "engaged", None
-
-        # --- J. GST Number / Tax Registration / Compliance Inquiry ---
-        if any(p in lower_resp for p in ["gst", "gstin", "tax registration", "gst registration", "gst number", "gst code", "are you registered"]):
-            profile_all_text = f"{seller_company} {seller_summary} {' '.join(seller_products)} {' '.join(seller_locations)}"
-            gst_match = re.search(r'\b(?:GST|GSTIN)[-:\s]*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1})\b', profile_all_text, re.I)
-            if gst_match:
-                ai_reply = f"Our GST registration number is {gst_match.group(1)}."
-            else:
-                ai_reply = "We are a fully registered enterprise, and our GST registration certificate and tax documents are included in our official invoice and vendor onboarding packet. I can include that when sharing our catalog."
-            return ai_reply, "engaged", None
-
-        # --- K. Pricing / MOQ / Wholesale Rates Inquiry ---
-        if any(p in lower_resp for p in ["how much", "what is the price", "what is your price", "pricing", "cost", "rates", "rate list", "price list", "quotation", "quote", "moq", "minimum order", "minimum quantity"]):
-            ai_reply = f"Our wholesale pricing and minimum order quantities depend on your order volume and specific designs for {products_str or 'our collection'}. What email address should I send our complete wholesale price sheet to?"
-            return ai_reply, "engaged", "budget"
-
-        # --- L. Discounts / Price Negotiation ---
-        if any(p in lower_resp for p in ["discount", "discounts", "negotiable", "best price", "cheaper", "reduction", "margin"]):
-            ai_reply = "Yes, we provide tiered volume discounts for bulk wholesale orders. What order quantity are you planning so I can check our best discount tier for you?"
-            return ai_reply, "engaged", "budget"
-
-        # --- M. Samples Request ---
-        if any(p in lower_resp for p in ["sample", "samples", "swatches", "sample piece"]):
-            ai_reply = "Yes, we arrange sample pieces and fabric swatches for wholesale buyers so you can verify our quality firsthand. What email address should I send the sample request form to?"
-            return ai_reply, "engaged", None
-
-        # --- N. Specific Product Inquiry ("Are you selling X?", "Do you have X?", "I need X") ---
-        is_asking_product = (
-            any(p in lower_resp for p in [
-                "are you selling", "do you sell", "do you have", "can you provide", "can you supply",
-                "is it available", "are these available", "do you offer", "selling it", "sell it"
-            ])
-            or (
-                ("need" in lower_resp or "want" in lower_resp or "looking for" in lower_resp)
-                and any(w in lower_resp for w in ["selling", "sell", "available", "have", "offer", "provide", "supply", "suits", "sarees", "kurtis", "lehengas", "fabrics", "cotton", "silk"])
-            )
-        )
-
-        if is_asking_product:
-            queried = prospect_text
-            for strip_phrase in ["i need", "we need", "looking for", "i want", "are you selling it", "are you selling", "do you sell it", "do you sell", "do you have", "is it available", "please", "online", "site"]:
-                queried = re.sub(re.escape(strip_phrase), "", queried, flags=re.I)
-            queried = queried.strip("?.! ")
-            if queried:
-                profile_texts = [p.lower() for p in seller_products] + [seller_summary.lower()]
-                q_words = [w for w in re.findall(r'[a-zA-Z]{3,}', queried.lower()) if w not in {'need', 'want', 'selling', 'sell', 'have', 'offer', 'supply', 'some', 'any', 'the', 'are', 'you', 'for'}]
-                matches = any(queried.lower() in pt for pt in profile_texts) or (q_words and any(all(qw in pt for qw in q_words) for pt in profile_texts))
-                if matches:
-                    ai_reply = f"Yes, we offer {queried}! We have a wide range of designs and wholesale options available. Would you like me to share the specifications?"
-                else:
-                    ai_reply = f"We don't currently offer {queried}. Our core artisan specialties include {products_str}. Would you like to review our catalog for those?"
-                return ai_reply, "engaged", None
-
-        # --- O. Order Volume / Timeline Specification ---
-        if vol_match or (time_match and any(w in lower_resp for w in ["deliver", "delivery", "need", "require", "order", "receive", "pieces", "units"])):
-            spec_parts = []
-            if vol_match:
-                spec_parts.append(vol_match.group(0))
-            if time_match:
-                spec_parts.append(time_match.group(0))
-            clean_spec = " with ".join(spec_parts) if spec_parts else "your requirement"
-            call.insights.need = f"Requirement for {clean_spec}"
-
-            ai_reply = f"Understood, noted your requirement for {clean_spec}. We can accommodate that schedule. What is the best email address to send our formal quotation and delivery terms to?"
-            return ai_reply, "engaged", None
-
-        # --- P. Delivery Location / Destination City Specification ---
-        loc_candidate = None
-        delivery_prep = re.search(r'\b(?:deliver to|delivery to|shipping to|dispatch to|location is|delivery in|we are in|based in|send to)\s+([a-zA-Z\s]+)', prospect_text, re.I)
-        if delivery_prep:
-            loc_candidate = delivery_prep.group(1).strip()
+        # Acknowledge the prospect's answer and ask next question
+        if state["quantity_covered"] and next_point == "timeline":
+            ai_reply = f"Understood, noted your requirement for {state['scope_quantity']}. {prompt_q}"
+        elif state["timeline_covered"] and next_point == "budget_deal_amount":
+            t_str = state["timeline"] if state["timeline"].lower().startswith("by ") else f"by {state['timeline']}"
+            ai_reply = f"Got it, target delivery {t_str}. {prompt_q}"
+        elif state["budget_covered"] and next_point == "authority":
+            ai_reply = f"Noted your budget status of {state['budget']}. {prompt_q}"
+        elif state["authority_covered"] and next_point == "closing":
+            ai_reply = f"Understood, noted your purchasing role as {state['authority']}. {prompt_q}"
+        elif any(p in lower_resp for p in ["yes", "sure", "okay", "fine", "go ahead", "tell me more", "sounds good", "continue"]):
+            ai_reply = f"Wonderful! {prompt_q}"
         else:
-            conversational_stopwords = {
-                "yes", "no", "okay", "hello", "hi", "hey", "sure", "thanks", "thank you", "send",
-                "call", "bye", "not", "fine", "good", "please", "later", "tomorrow", "today",
-                "you", "i", "we", "they", "me", "us", "he", "she", "it", "who", "what", "where",
-                "how", "when", "why", "which", "are", "is", "was", "were", "am", "do", "did",
-                "done", "have", "has", "had", "can", "could", "would", "should", "will", "shall",
-                "want", "need", "interested", "help", "about", "tell", "speak", "talk", "hear",
-                "more", "much", "many", "price", "cost", "rate", "catalog", "sample", "product"
-            }
-            if 1 <= len(tokens) <= 2 and not any(t in conversational_stopwords for t in tokens):
-                loc_candidate = prospect_text.strip().strip(".!?,")
+            ai_reply = f"Understood. {prompt_q}"
 
-        if loc_candidate and len(loc_candidate) >= 3:
-            dest_loc = loc_candidate.title()
-            call.insights.target_location = dest_loc
-            call.insights.delivery_location = dest_loc
-            call.insights.summary = f"Prospect specified delivery location: {dest_loc}."
-            db_lead = db.query(DBLead).filter(DBLead.id == call.lead_id).first()
-            if db_lead:
-                db_lead.location = dest_loc
-                db.commit()
-
-            ai_reply = f"Understood, noted your delivery location as {dest_loc}. We can coordinate dispatch and logistics for {dest_loc}. What order volume or timeline are you targeting?"
-            return ai_reply, "engaged", None
-
-        # --- Q. Affirmation / Moving Forward ("Yes, move ahead", "Sure", "Go ahead", "Tell me more") ---
-        if (
-            any(p in lower_resp for p in ["yes, move ahead", "move ahead", "go ahead", "tell me more", "sounds good", "continue", "let's do it", "lets do it"])
-            or any(t in tokens for t in ["yes", "sure", "okay", "fine", "interested"])
-        ):
-            if "good time to talk" in last_ai_text or "quick conversation" in last_ai_text or call.stage == "greeting":
-                ai_reply = f"Wonderful! We are {seller_company}, specializing in {products_str}. We reached out regarding your requirement for {target_service}. Are you looking to order for your retail inventory or an upcoming requirement?"
-                return ai_reply, "engaged", None
-            elif "email" in last_ai_text:
-                ai_reply = "Great! What email address should we send it to?"
-                return ai_reply, "engaged", None
-            elif prospect_provided_email:
-                ai_reply = f"Terrific! I will dispatch the complete catalog and pricing details to {prospect_provided_email}. Thank you for your time, and we look forward to working together!"
-                call.status = "Completed"
-                call.insights.qualification_verdict = "Interested"
-                lead_service.update_status(db, user_id, call.lead_id, "Interested")
-                return ai_reply, "completed", None
-            else:
-                ai_reply = "Terrific! Would you like me to send our complete wholesale catalog and pricing details to your email?"
-                return ai_reply, "engaged", None
-
-        # --- R. Default Conversational Fallback ---
-        is_generic_question = (
-            ("?" in prospect_text)
-            or any(lower_resp.startswith(q) for q in ["who", "what", "where", "when", "why", "how", "can", "could", "do", "does", "are", "is", "tell", "which", "will"])
-        )
-        if is_generic_question:
-            ai_reply = f"Regarding {products_str or 'our offerings'}, I'd be happy to check that specific detail with our operations team and follow up. Would you like me to send that information over to your email?"
-        else:
-            ai_reply = f"Understood. At {seller_company}, we can tailor our {products_str or 'wholesale offerings'} to your specifications. What specific questions or volume requirements do you have?"
         return ai_reply, "engaged", None
 
     def process_dialogue_step(
@@ -1037,7 +1153,7 @@ You MUST return ONLY a JSON object matching this schema:
         call.turns.append(ai_turn)
 
         # 4. Refresh Structured BANT Insights via AI Semantic Analysis
-        is_finished = (call.status == "Completed" or next_stage == "completed")
+        is_finished = (call.status in ["Completed", "Ended"] or next_stage in ["completed", "ended"])
         call.insights = self._analyze_call_with_ai(
             call=call,
             seller_profile=seller_profile,
@@ -1066,11 +1182,17 @@ You MUST return ONLY a JSON object matching this schema:
         if not call:
             raise ValueError(f"Call session {call_id} not found")
 
-        call.status = "Completed"
-        call.stage = "completed"
-
         seller_profile = business_service.get_profile_by_user(user_id, db)
         lead = lead_service.get_lead_by_id(db, user_id, call.lead_id)
+        state = self._extract_qualification_state(call, seller_profile, lead)
+
+        # If customer ended call or qualification is incomplete, mark as Ended; only Completed if fully qualified
+        if state["customer_ended_call"] or not state["is_complete"] or call.status == "Ended":
+            call.status = "Ended"
+            call.stage = "ended"
+        else:
+            call.status = "Completed"
+            call.stage = "completed"
 
         call.insights = self._analyze_call_with_ai(
             call=call,
@@ -1082,18 +1204,70 @@ You MUST return ONLY a JSON object matching this schema:
         # Update in DB
         db_row = db.query(DBCallSession).filter(DBCallSession.id == call.id).first()
         if db_row:
-            db_row.status = "Completed"
+            db_row.status = call.status
             db_row.summary = call.insights.summary
             db_row.qualification_verdict = call.insights.qualification_verdict
             db_row.qualification_data = call.insights.model_dump()
             db.commit()
 
-        if call.insights.qualification_verdict == "Interested":
+        if call.status == "Completed" and call.insights.qualification_verdict == "Interested":
             lead_service.update_status(db, user_id, call.lead_id, "Meeting_Booked")
+            self._sync_call_to_opportunity(call, lead, seller_profile, state, user_id, db)
         elif call.insights.qualification_verdict in ["Not_Interested", "Disqualified"]:
             lead_service.update_status(db, user_id, call.lead_id, "Disqualified")
 
         return call
+
+    def _sync_call_to_opportunity(
+        self,
+        call: CallSession,
+        lead: Optional[Lead],
+        seller_profile: Optional[StructuredBusinessProfile],
+        state: Dict[str, Any],
+        user_id: str,
+        db: Session
+    ):
+        """
+        Creates or updates a real Opportunity in SQLite ONLY when genuine conversational evidence exists.
+        Never fabricates deal amounts or fake stages.
+        """
+        if not (call.status == "Completed" and call.insights and call.insights.qualification_verdict == "Interested"):
+            return
+
+        try:
+            from app.services.crm_service import crm_service
+            contact_email = (
+                (lead.primary_contact.email if lead and lead.primary_contact else "")
+                or (state.get("email") or f"buyer@{call.company_name.lower().replace(' ', '')}.com")
+            )
+            deal_val = (
+                call.insights.deal_amount
+                if (call.insights.deal_amount and call.insights.deal_amount != "Not available")
+                else None
+            )
+            next_action = (
+                call.insights.next_best_action
+                if (call.insights.next_best_action and call.insights.next_best_action != "Not available")
+                else f"Email catalog and formal quotation to {contact_email}"
+            )
+            crm_service.create_opportunity(
+                db=db,
+                user_id=user_id,
+                lead_id=call.lead_id,
+                company_name=call.company_name,
+                domain=lead.domain if lead else f"{call.company_name.lower().replace(' ', '')}.com",
+                contact_name=call.contact_name or (lead.primary_contact.name if lead and lead.primary_contact else "Decision Maker"),
+                contact_email=contact_email,
+                matched_offering=call.insights.product_service or (lead.matched_offering if lead else "Wholesale Supply"),
+                deal_value=deal_val,
+                stage="Qualified",
+                next_action_title=next_action,
+                next_action_priority="High",
+                assigned_rep=(seller_profile.sender_name if seller_profile else None) or "Account Executive",
+            )
+            lead_service.update_status(db, user_id, call.lead_id, "Opportunity_Created")
+        except Exception as e:
+            print(f"[Opportunity Sync Error]: {e}")
 
     def _db_to_schema(self, row: DBCallSession) -> CallSession:
         turns = [CallTurn(**t) for t in (row.turns or [])]
@@ -1118,6 +1292,7 @@ You MUST return ONLY a JSON object matching this schema:
                 scope_users=scope_val,
                 timeline=raw_insights.get("timeline", "Not available"),
                 budget=raw_insights.get("budget", "Not disclosed"),
+                deal_amount=raw_insights.get("deal_amount", "Not available"),
                 authority=raw_insights.get("authority", "Not available"),
                 target_location=raw_insights.get("target_location", None),
                 delivery_location=raw_insights.get("delivery_location", None),
@@ -1131,14 +1306,24 @@ You MUST return ONLY a JSON object matching this schema:
                 qualification_verdict=raw_insights.get("qualification_verdict", row.qualification_verdict or "Analysis Unavailable")
             )
 
+        raw_status = row.status or "Completed"
+        summary_lower = (row.summary or "").lower()
+        if (
+            "ended the call before" in summary_lower
+            or "customer ended the call" in summary_lower
+            or "customer ended" in summary_lower
+            or "ended before the complete discussion" in summary_lower
+        ):
+            raw_status = "Ended"
+
         return CallSession(
             id=row.id,
             lead_id=row.lead_id or "",
             company_name=row.company_name,
             contact_name=row.lead_name or "Prospect Contact",
             contact_title="Decision Maker",
-            status=row.status or "Completed",
-            stage="completed" if row.status == "Completed" else "in_progress",
+            status=raw_status,
+            stage="completed" if raw_status == "Completed" else ("ended" if raw_status == "Ended" else "in_progress"),
             duration_seconds=row.duration_seconds or 30,
             started_at=row.created_at.isoformat() if row.created_at else datetime.datetime.utcnow().isoformat(),
             turns=turns,

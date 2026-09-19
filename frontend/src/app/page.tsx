@@ -2,23 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-  Radar,
-  PhoneCall,
-  Sparkles,
-  RefreshCw,
-  Building2,
-  Users,
-  ArrowRight,
-  CheckCircle2,
-} from 'lucide-react';
+import { Radar, PhoneCall, RefreshCw, Activity } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Lead, Opportunity, CallSession, DashboardOverview } from '@/lib/types';
-import { StatCardsGroup } from '@/components/dashboard/StatCardsGroup';
+import { CommandKpis } from '@/components/dashboard/CommandKpis';
+import { AttentionLeads } from '@/components/dashboard/AttentionLeads';
+import { RecentActivityFeed } from '@/components/dashboard/RecentActivityFeed';
 import { ConversionFunnel } from '@/components/dashboard/ConversionFunnel';
-import { RecentOpportunities } from '@/components/dashboard/RecentOpportunities';
-import { RecentAICalls } from '@/components/dashboard/RecentAICalls';
-import { IntentDistribution } from '@/components/dashboard/IntentDistribution';
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
@@ -27,6 +17,14 @@ export default function DashboardPage() {
   const [calls, setCalls] = useState<CallSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [greeting, setGreeting] = useState('Welcome back');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting('Good morning');
+    else if (hour < 18) setGreeting('Good afternoon');
+    else setGreeting('Good evening');
+  }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -57,63 +55,69 @@ export default function DashboardPage() {
     loadDashboardData();
   };
 
-  // Pure dynamic counts from database
+  // Pure dynamic counts from verified database data
   const totalLeadsCount = leads.length;
-  const highIntentCount = leads.filter(
-    (l) => l.intent && (l.intent.grade === 'A' || l.intent.overall_score >= 80)
-  ).length;
+
   const qualifiedCount = leads.filter(
     (l) =>
       l.status === 'Matched' ||
       l.status === 'Outreach_Ready' ||
       l.status === 'Interested' ||
-      l.status === 'Opportunity_Created'
+      l.status === 'Opportunity_Created' ||
+      Boolean(l.match)
   ).length;
+
   const interestedCount = leads.filter(
     (l) => l.status === 'Interested' || l.status === 'Opportunity_Created'
   ).length;
 
+  const opportunitiesCount = opportunities.length;
+
+  const signalsCount =
+    overview?.buying_signals_summary?.total_active_signals ||
+    overview?.funnel?.[0]?.count ||
+    totalLeadsCount;
+
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Top Banner & Quick Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-white border border-indigo-100 shadow-sm p-1 shrink-0 flex items-center justify-center">
-            <img src="/logo.png" alt="AI Sales Agent" className="w-full h-full object-cover rounded-lg" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-              <span>Sales Intelligence & Opportunity Dashboard</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Active Database
-              </span>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* 1. Header + Greeting */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/90 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {greeting}, Sales Leader
             </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Real-time signal tracking, intent qualification, automated AI calling, and CRM pipeline.
-            </p>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live Database
+            </span>
           </div>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Sales Command Center — real-time attention queue and pipeline execution.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
-            title="Refresh Data"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+            title="Refresh database records"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
           <Link
             href="/discovery"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm shadow-indigo-200 transition-all"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs shadow-indigo-100 transition-all"
           >
             <Radar className="w-3.5 h-3.5" />
             <span>Discover Signals</span>
           </Link>
           <Link
             href="/calling"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-2xs transition-all"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-all"
           >
             <PhoneCall className="w-3.5 h-3.5 text-indigo-400" />
             <span>Launch AI Call</span>
@@ -121,108 +125,33 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Dynamic Metric Cards */}
-      <StatCardsGroup
-        totalLeads={totalLeadsCount}
-        highIntent={highIntentCount}
-        qualified={qualifiedCount}
+      {/* 2. Top 4 KPIs: Leads, Interested, Qualified, Opportunities */}
+      <CommandKpis
+        leads={totalLeadsCount}
         interested={interestedCount}
+        qualified={qualifiedCount}
+        opportunities={opportunitiesCount}
       />
 
-      {/* 4-Stage Conversion Funnel: Signals ➔ Leads ➔ Outreach ➔ Deals */}
-      <ConversionFunnel funnel={overview?.funnel || []} />
-
-      {/* Guided Onboarding Banner when database has 0 leads */}
-      {leads.length === 0 && (
-        <div className="bg-gradient-to-r from-indigo-50/80 via-white to-blue-50/80 border border-indigo-100 rounded-2xl p-6 sm:p-8">
-          <div className="max-w-2xl">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5 mb-2">
-              <Sparkles className="w-4 h-4" />
-              <span>Workspace Ready</span>
-            </span>
-            <h2 className="text-xl font-bold text-slate-900">
-              Welcome! Let&apos;s start discovering high-intent buyer signals.
-            </h2>
-            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              Your database is clean with zero hardcoded fake data. Set up your business profile so the AI agent understands your offerings, then discover verified buying requirements.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <Link
-              href="/business"
-              className="p-4 bg-white rounded-xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm mb-3">
-                  1
-                </div>
-                <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Set Up Business Profile
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Provide your company offerings or upload docs for AI extraction.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 mt-4">
-                <span>Configure Profile</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </Link>
-
-            <Link
-              href="/discovery"
-              className="p-4 bg-white rounded-xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm mb-3">
-                  2
-                </div>
-                <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Discover Buying Signals
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Search and score live buyer RFPs and intent requirements.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 mt-4">
-                <span>Find Signals</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </Link>
-
-            <Link
-              href="/leads"
-              className="p-4 bg-white rounded-xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm mb-3">
-                  3
-                </div>
-                <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  Build Your Pipeline
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Convert high-match opportunities into qualified pipeline leads.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 mt-4">
-                <span>View Pipeline</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </Link>
-          </div>
+      {/* 3 & 4. Main Two-Column Hub: What Needs Attention (Left) & Recent Activity (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-7">
+          <AttentionLeads leads={leads} />
         </div>
-      )}
-
-      {/* Middle Grid: Recent Opportunities & Recent AI Calls */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <RecentOpportunities opportunities={opportunities} />
-        <RecentAICalls calls={calls} />
+        <div className="lg:col-span-5">
+          <RecentActivityFeed calls={calls} opportunities={opportunities} />
+        </div>
       </div>
 
-      {/* Bottom Section: Lead Intent Distribution */}
-      <IntentDistribution leads={leads} />
+      {/* 5. Bottom "Sales Flow": Signals → Leads → Qualified → Opportunities */}
+      <ConversionFunnel
+        title="Sales Flow"
+        subtitle="Signals → Leads → Qualified → Opportunities"
+        signals={signalsCount}
+        leads={totalLeadsCount}
+        qualified={qualifiedCount}
+        opportunities={opportunitiesCount}
+      />
     </div>
   );
 }

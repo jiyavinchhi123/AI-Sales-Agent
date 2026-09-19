@@ -6,9 +6,6 @@ import {
   BuyingSignal,
   Lead,
   CallSession,
-  Campaign,
-  CampaignCreateInput,
-  CampaignLaunchResponse,
   Opportunity,
   DashboardOverview,
   OfferingMatch,
@@ -254,37 +251,6 @@ export const api = {
       method: 'POST',
     }),
 
-  // Campaigns
-  getCampaigns: async (): Promise<Campaign[]> => {
-    try {
-      return await request<Campaign[]>('/campaigns');
-    } catch {
-      return [];
-    }
-  },
-
-  createCampaign: (data: CampaignCreateInput): Promise<Campaign> =>
-    request<Campaign>('/campaigns', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  launchCampaign: (campaignId: string): Promise<CampaignLaunchResponse> =>
-    request<CampaignLaunchResponse>(`/campaigns/${campaignId}/launch`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
-
-  toggleCampaignStatus: (campaignId: string): Promise<Campaign> =>
-    request<Campaign>(`/campaigns/${campaignId}/toggle`, {
-      method: 'POST',
-    }),
-
-  deleteCampaign: (campaignId: string): Promise<{ message: string; campaign_id: string }> =>
-    request<{ message: string; campaign_id: string }>(`/campaigns/${campaignId}`, {
-      method: 'DELETE',
-    }),
-
   // Opportunities & CRM
   getOpportunities: async (): Promise<Opportunity[]> => {
     try {
@@ -296,6 +262,11 @@ export const api = {
 
   createOpportunityFromLead: (leadId: string): Promise<Opportunity> =>
     request<Opportunity>(`/opportunities/create-from-lead/${leadId}`, {
+      method: 'POST',
+    }),
+
+  createOpportunityFromCall: (callId: string): Promise<Opportunity> =>
+    request<Opportunity>(`/opportunities/create-from-call/${callId}`, {
       method: 'POST',
     }),
 

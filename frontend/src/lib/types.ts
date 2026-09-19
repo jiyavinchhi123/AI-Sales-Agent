@@ -228,6 +228,7 @@ export interface CallInsights {
   scope_users?: string;
   timeline?: string;
   budget?: string;
+  deal_amount?: string | null;
   authority?: string;
   target_location?: string | null;
   delivery_location?: string | null;
@@ -247,7 +248,6 @@ export interface CallSession {
   company_name: string;
   contact_name: string;
   contact_title: string;
-  campaign_id?: string;
   status: string;
   stage?: string;
   duration_seconds: number;
@@ -255,52 +255,6 @@ export interface CallSession {
   turns: CallTurn[];
   insights?: CallInsights;
   battlecards_used: ObjectionBattlecard[];
-}
-
-export interface CadenceStep {
-  step: number;
-  channel: string;
-  timing: string;
-  action: string;
-}
-
-export interface Campaign {
-  id: string;
-  user_id?: string;
-  name: string;
-  description: string;
-  target_criteria: string;
-  status: string;
-  channels: string[];
-  tone?: string;
-  cadence_steps?: CadenceStep[];
-  total_leads: number;
-  contacted_count: number;
-  interested_count: number;
-  scheduled_meetings: number;
-  response_rate: number;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface CampaignCreateInput {
-  name: string;
-  description?: string;
-  target_criteria?: string;
-  channels: string[];
-  tone?: string;
-  target_intent?: string;
-}
-
-export interface CampaignLaunchResponse {
-  success: boolean;
-  campaign_id: string;
-  campaign_name: string;
-  status: string;
-  leads_enrolled: number;
-  emails_dispatched: number;
-  calls_initiated: number;
-  message: string;
 }
 
 export interface NextBestAction {
@@ -322,6 +276,7 @@ export interface Opportunity {
   contact_name: string;
   contact_email: string;
   matched_offering: string;
+  deal_value?: number | null;
   deal_value_estimate: string;
   stage: string;
   win_probability: number;
@@ -334,7 +289,71 @@ export interface Opportunity {
   updated_at: string;
 }
 
+export interface ConversionRates {
+  signal_to_lead: number;
+  lead_to_opportunity: number;
+  overall_conversion: number;
+  counts: {
+    signals: number;
+    leads: number;
+    outreach: number;
+    opportunities: number;
+  };
+}
+
+export interface BuyingSignalItem {
+  id: string;
+  company_name: string;
+  source: string;
+  category?: string;
+  requirement: string;
+  product?: string | null;
+  intent_level?: string | null;
+  status: string;
+  lead_id?: string | null;
+  detected_at?: string | null;
+}
+
+export interface BuyingSignalsSummary {
+  total_active_signals: number;
+  signals: BuyingSignalItem[];
+}
+
+export interface OpportunityRecord {
+  id: string;
+  company_name: string;
+  stage: string;
+  deal_value?: number | null;
+  formatted_deal_value?: string | null;
+  assigned_rep?: string;
+  next_action_title?: string;
+  next_action_priority?: string;
+  crm_synced?: boolean;
+  crm_target?: string;
+  created_at?: string;
+}
+
+export interface OpportunitySummary {
+  total_count: number;
+  has_real_values: boolean;
+  pipeline_value?: number | null;
+  formatted_pipeline_value?: string | null;
+  stage_breakdown: Array<{ stage: string; count: number }>;
+  opportunities: OpportunityRecord[];
+}
+
 export interface DashboardOverview {
+  conversion_rates?: ConversionRates;
+  funnel: Array<{
+    stage: string;
+    label?: string;
+    count: number;
+    percentage: number;
+    dropoff_percentage?: number;
+    description?: string;
+  }>;
+  buying_signals_summary?: BuyingSignalsSummary;
+  opportunity_summary?: OpportunitySummary;
   kpis: {
     active_buying_signals: number;
     high_urgency_signals: number;
@@ -347,36 +366,9 @@ export interface DashboardOverview {
     average_response_rate: string;
     ai_qualification_rate: string;
   };
-  funnel: Array<{
-    stage: string;
-    label?: string;
-    count: number;
-    percentage: number;
-    dropoff_percentage?: number;
-    description?: string;
-  }>;
-  top_buying_signals: BuyingSignal[];
-  high_priority_leads: Lead[];
-  recent_opportunities: Opportunity[];
-  pipeline_health?: {
-    health_score: number;
-    health_label: string;
-    total_pipeline_value: string;
-    active_deals_count: number;
-    stage_breakdown: Array<{
-      stage: string;
-      count: number;
-      value: number;
-      formatted_value: string;
-      avg_win_rate: number;
-    }>;
-    signals_by_category: Array<{
-      category: string;
-      count: number;
-      percentage: number;
-    }>;
-    average_cycle_days: number;
-  };
+  top_buying_signals?: any[];
+  high_priority_leads?: Lead[];
+  recent_opportunities?: any[];
 }
 
 export interface EmailDraftResponse {
