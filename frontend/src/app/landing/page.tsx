@@ -98,19 +98,7 @@ export default function LandingPage() {
       </header>
 
       {/* 2. HERO SECTION */}
-      <section className="pt-8 pb-20 sm:pt-12 sm:pb-28 text-center px-4 sm:px-6 max-w-4xl mx-auto">
-        {/* Video Showcase (First) */}
-        <div className="mb-10 w-full rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/80">
-          <video
-            src="/demo-video.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-auto block"
-          />
-        </div>
-
+      <section className="pt-12 pb-20 sm:pt-16 sm:pb-28 text-center px-4 sm:px-6 max-w-4xl mx-auto">
         {/* Center Logo */}
         <div className="flex justify-center mb-6">
           <img
@@ -155,6 +143,18 @@ export default function LandingPage() {
             <PhoneCall className="w-4 h-4 text-indigo-600" />
             <span>Launch AI Call</span>
           </Link>
+        </div>
+
+        {/* Video Showcase */}
+        <div className="mt-12 w-full rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/80">
+          <video
+            src="/demo-video.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-auto block"
+          />
         </div>
 
         {/* The 3-Step Transformation Card (Shows what the product actually does in 5 seconds) */}
