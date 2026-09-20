@@ -42,9 +42,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 bg-white p-0.5 shadow-2xs">
-              <img src="/logo.png" alt="AI Sales Agent" className="w-full h-full object-cover rounded" />
-            </div>
+            <img src="/logo.png" alt="AI Sales Agent" className="w-8 h-8 object-contain" />
             <span className="font-bold text-sm text-slate-900 tracking-tight">AI Sales Agent</span>
           </Link>
 
@@ -100,7 +98,28 @@ export default function LandingPage() {
       </header>
 
       {/* 2. HERO SECTION */}
-      <section className="pt-16 pb-20 sm:pt-24 sm:pb-28 text-center px-4 sm:px-6 max-w-4xl mx-auto">
+      <section className="pt-8 pb-20 sm:pt-12 sm:pb-28 text-center px-4 sm:px-6 max-w-4xl mx-auto">
+        {/* Video Showcase (First) */}
+        <div className="mb-10 w-full rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/80">
+          <video
+            src="/demo-video.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-auto block"
+          />
+        </div>
+
+        {/* Center Logo */}
+        <div className="flex justify-center mb-6">
+          <img
+            src="/logo.png"
+            alt="AI Sales Agent Logo"
+            className="w-44 h-44 sm:w-56 sm:h-56 object-contain hover:scale-105 transition-transform duration-300"
+          />
+        </div>
+
         {/* Eyebrow Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 mb-6">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
